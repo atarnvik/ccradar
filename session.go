@@ -41,6 +41,31 @@ func sessionsDir() string { return envOr("CLAUDE_SESSIONS_DIR", filepath.Join(ho
 func projectsDir() string { return envOr("CLAUDE_PROJECTS_DIR", filepath.Join(homeDir(), ".claude", "projects")) }
 func procMatch() string   { return envOr("CLAUDE_PROC_MATCH", "claude") }
 
+// dirFilter, when set, scopes ccradar to a directory and its subdirectories.
+var dirFilter string
+
+// setDirFilter records the directory scope, expanding ~ and resolving to an
+// absolute, cleaned path.
+func setDirFilter(p string) {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		p = filepath.Join(homeDir(), p[1:])
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	dirFilter = filepath.Clean(p)
+}
+
+// underFilter reports whether cwd is the filter directory or below it. With no
+// filter set it always returns true.
+func underFilter(cwd string) bool {
+	if dirFilter == "" {
+		return true
+	}
+	cwd = filepath.Clean(cwd)
+	return cwd == dirFilter || strings.HasPrefix(cwd, dirFilter+string(filepath.Separator))
+}
+
 type regFile struct {
 	PID       int    `json:"pid"`
 	SessionID string `json:"sessionId"`
@@ -96,6 +121,9 @@ func loadSessions() []Session {
 		}
 		var rf regFile
 		if json.Unmarshal(b, &rf) != nil || rf.PID == 0 {
+			continue
+		}
+		if !underFilter(rf.CWD) {
 			continue
 		}
 		if !pidAlive(rf.PID) || procComm(rf.PID) != procMatch() {

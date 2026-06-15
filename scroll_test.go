@@ -115,6 +115,33 @@ func TestObserveBusyToIdle(t *testing.T) {
 	}
 }
 
+func TestUnderFilter(t *testing.T) {
+	defer func() { dirFilter = "" }()
+
+	dirFilter = "" // no filter → everything passes
+	if !underFilter("/anything/at/all") {
+		t.Fatal("no filter should match all")
+	}
+
+	setDirFilter("/Users/me/src/app")
+	cases := []struct {
+		cwd  string
+		want bool
+	}{
+		{"/Users/me/src/app", true},          // exact
+		{"/Users/me/src/app/api", true},      // subdir
+		{"/Users/me/src/app/a/b/c", true},    // deep subdir
+		{"/Users/me/src/application", false},  // prefix but not a subdir
+		{"/Users/me/src", false},             // parent
+		{"/Users/me/other", false},           // sibling
+	}
+	for _, c := range cases {
+		if got := underFilter(c.cwd); got != c.want {
+			t.Errorf("underFilter(%q)=%v want %v", c.cwd, got, c.want)
+		}
+	}
+}
+
 func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
 	m := model{width: 80, height: 14}
 	m.rows = mkRows(30)
