@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,6 +24,7 @@ type Session struct {
 	Status    string
 	UpdatedAt int64 // ms epoch
 	Title     string
+	Model     string // model of the last non-sidechain assistant turn
 	GhosttyID string // matched Ghostty terminal id; "" if no tab found
 }
 
@@ -106,7 +108,7 @@ func loadSessions() []Session {
 			Status:    rf.Status,
 			UpdatedAt: rf.UpdatedAt,
 		}
-		s.Title = titleFor(rf.SessionID)
+		s.Title, s.Model = metaFor(rf.SessionID)
 		s.GhosttyID = matchTerminal(terms, used, s.CWD, s.Title)
 		out = append(out, s)
 	}
@@ -120,37 +122,90 @@ func loadSessions() []Session {
 	return out
 }
 
-// titleFor finds the latest ai-title for a session from its transcript.
-func titleFor(sid string) string {
+// metaFor returns the latest ai-title and the model of the last non-sidechain
+// assistant turn for a session, in a single pass over its transcript.
+func metaFor(sid string) (title, model string) {
 	if sid == "" {
-		return ""
+		return "", ""
 	}
 	matches, _ := filepath.Glob(filepath.Join(projectsDir(), "*", sid+".jsonl"))
 	if len(matches) == 0 {
-		return ""
+		return "", ""
 	}
 	f, err := os.Open(matches[0])
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	defer f.Close()
 
-	var title string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1024*1024), 32*1024*1024) // allow long transcript lines
 	for sc.Scan() {
 		line := sc.Bytes()
-		if !strings.Contains(string(line), `"type":"ai-title"`) {
-			continue
+		if t, ok := scanTitle(line); ok {
+			title = t // keep last
 		}
-		var rec struct {
-			AiTitle string `json:"aiTitle"`
-		}
-		if json.Unmarshal(line, &rec) == nil && rec.AiTitle != "" {
-			title = rec.AiTitle // keep last
+		if mdl, ok := scanModel(line); ok {
+			model = mdl // keep last main-thread model
 		}
 	}
-	return title
+	return title, model
+}
+
+// scanTitle extracts an ai-title from a transcript line, if present.
+func scanTitle(line []byte) (string, bool) {
+	if !bytes.Contains(line, []byte(`"type":"ai-title"`)) {
+		return "", false
+	}
+	var rec struct {
+		AiTitle string `json:"aiTitle"`
+	}
+	if json.Unmarshal(line, &rec) == nil && rec.AiTitle != "" {
+		return rec.AiTitle, true
+	}
+	return "", false
+}
+
+// scanModel extracts the model from a non-sidechain assistant line, if present.
+// Sidechain (sub-agent) turns are skipped so the main thread's model wins.
+func scanModel(line []byte) (string, bool) {
+	if !bytes.Contains(line, []byte(`"type":"assistant"`)) {
+		return "", false
+	}
+	var rec struct {
+		IsSidechain bool `json:"isSidechain"`
+		Message     struct {
+			Model string `json:"model"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &rec) == nil && !rec.IsSidechain && rec.Message.Model != "" {
+		return rec.Message.Model, true
+	}
+	return "", false
+}
+
+// modelShort trims the "claude-" prefix and a trailing date snapshot for display
+// (e.g. "claude-opus-4-8" -> "opus-4-8", "claude-haiku-4-5-20251001" -> "haiku-4-5").
+func modelShort(m string) string {
+	if m == "" {
+		return ""
+	}
+	m = strings.TrimPrefix(m, "claude-")
+	if i := strings.LastIndex(m, "-"); i > 0 {
+		if tail := m[i+1:]; len(tail) >= 6 && isAllDigits(tail) {
+			m = m[:i]
+		}
+	}
+	return m
+}
+
+func isAllDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // fmtAge renders a millisecond delta as a compact age (e.g. 12s, 3m, 2h, 1d).
