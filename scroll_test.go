@@ -19,6 +19,36 @@ func mkRows(n int) []row {
 	return rs
 }
 
+func TestSortModes(t *testing.T) {
+	ss := []Session{
+		{CWD: "/b", Title: "zebra", UpdatedAt: 100},
+		{CWD: "/b", Title: "apple", UpdatedAt: 300}, // newest overall
+		{CWD: "/a", Title: "mango", UpdatedAt: 200},
+	}
+
+	alpha := append([]Session(nil), ss...)
+	(&model{sort: sortAlpha}).sortSessions(alpha)
+	// directory A→Z, then title A→Z within a dir
+	gotA := []string{alpha[0].CWD + ":" + alpha[0].Title, alpha[1].CWD + ":" + alpha[1].Title, alpha[2].CWD + ":" + alpha[2].Title}
+	wantA := []string{"/a:mango", "/b:apple", "/b:zebra"}
+	for i := range wantA {
+		if gotA[i] != wantA[i] {
+			t.Fatalf("alpha: got %v want %v", gotA, wantA)
+		}
+	}
+
+	recent := append([]Session(nil), ss...)
+	(&model{sort: sortRecent}).sortSessions(recent)
+	// group /b is newest (300) so it comes first, newest row first within it
+	gotR := []string{recent[0].CWD + ":" + recent[0].Title, recent[1].CWD + ":" + recent[1].Title, recent[2].CWD + ":" + recent[2].Title}
+	wantR := []string{"/b:apple", "/b:zebra", "/a:mango"}
+	for i := range wantR {
+		if gotR[i] != wantR[i] {
+			t.Fatalf("recent: got %v want %v", gotR, wantR)
+		}
+	}
+}
+
 func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
 	m := model{width: 80, height: 14}
 	m.rows = mkRows(30)
