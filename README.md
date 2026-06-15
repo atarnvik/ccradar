@@ -27,6 +27,9 @@ data and drives your terminal through its AppleScript API. No daemon, no network
   (`s`) between alphabetical and last-active.
 - Each row shows the **model** in use; live auto-refresh, status/age at a glance,
   directory grouping.
+- **Update check** — on launch ccradar asks Go's module proxy whether a newer
+  release exists and shows `⬆ vX.Y.Z` plus the install command. No accounts, no
+  GitHub API; disable with `CCRADAR_NO_UPDATE_CHECK=1`.
 
 ## Install
 

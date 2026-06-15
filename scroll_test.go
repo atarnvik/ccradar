@@ -177,6 +177,41 @@ func TestDetectDriver(t *testing.T) {
 	}
 }
 
+func TestCmpSemver(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"v0.2.0", "v0.2.1", -1},
+		{"v0.2.1", "v0.2.1", 0},
+		{"v0.3.0", "v0.2.9", 1},
+		{"v1.0.0", "v0.9.9", 1},
+		{"v0.2.1-rc1", "v0.2.1", 0}, // suffix ignored
+		{"0.2.0", "v0.2.1", -1},     // missing leading v
+		{"v0.10.0", "v0.9.0", 1},    // numeric, not lexical
+	}
+	for _, c := range cases {
+		if got := cmpSemver(c.a, c.b); got != c.want {
+			t.Errorf("cmpSemver(%q,%q)=%d want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestLatestIfNewerOptOutAndDevBuild(t *testing.T) {
+	// opt-out short-circuits before any network call
+	t.Setenv("CCRADAR_NO_UPDATE_CHECK", "1")
+	if got := latestIfNewer(); got != "" {
+		t.Fatalf("opt-out should return \"\", got %q", got)
+	}
+	// dev build (no embedded version) also returns "" without hitting the network
+	t.Setenv("CCRADAR_NO_UPDATE_CHECK", "")
+	if currentVersion() == "" {
+		if got := latestIfNewer(); got != "" {
+			t.Fatalf("dev build should return \"\", got %q", got)
+		}
+	}
+}
+
 func TestUnderFilter(t *testing.T) {
 	defer func() { dirFilter = "" }()
 

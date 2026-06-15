@@ -23,6 +23,7 @@ var (
 	styTitle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	styModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("103"))
 	stySearch   = lipgloss.NewStyle().Foreground(lipgloss.Color("227")).Bold(true)
+	styUpdate   = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 	styTab      = lipgloss.NewStyle().Foreground(lipgloss.Color("44"))
 	styCursor   = lipgloss.NewStyle().Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231")).Bold(true)
 	styHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -71,6 +72,7 @@ type model struct {
 	searching  bool   // editing the search query
 	query      string // active fuzzy filter ("" = no filter)
 	notify     bool   // send a notification on busy→idle
+	latestVer  string // newer available version ("" = up to date / unknown)
 	prevStatus map[string]string // sessionID → last seen status (transition tracking)
 	sessions   []Session
 	history    []HistEntry
@@ -97,7 +99,15 @@ func loadHistCmd(activeIDs map[string]bool) tea.Cmd {
 	return func() tea.Msg { return histMsg(loadHistory(activeIDs)) }
 }
 
-func (m model) Init() tea.Cmd { return tea.Batch(loadActiveCmd(), tickCmd()) }
+func (m model) Init() tea.Cmd { return tea.Batch(loadActiveCmd(), tickCmd(), checkUpdateCmd()) }
+
+type updateMsg string
+
+// checkUpdateCmd asks the module proxy (once, on startup) whether a newer
+// version exists. Silent on any failure.
+func checkUpdateCmd() tea.Cmd {
+	return func() tea.Msg { return updateMsg(latestIfNewer()) }
+}
 
 // observe diffs the incoming sessions against the last seen statuses and returns
 // notification commands for any busy→idle transition (when notifications are on).
@@ -448,6 +458,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewHistory {
 			m.rebuild()
 		}
+	case updateMsg:
+		if v := string(msg); v != "" {
+			m.latestVer = v
+			// One-time nudge with the actual command; cleared by any keypress.
+			m.flash = "update " + v + " available — go install github.com/atarnvik/ccradar@latest"
+		}
 	case tea.KeyMsg:
 		if m.searching {
 			return m.handleSearchKey(msg)
@@ -699,6 +715,11 @@ func (m model) View() string {
 	if dirFilter != "" {
 		b.WriteString(styDim.Render("  ⌂ " + dirDisplay(dirFilter)))
 	}
+	if m.latestVer != "" {
+		// Keep this short so the top line doesn't wrap (which would overflow the
+		// frame). The full install command is shown once via the flash line.
+		b.WriteString("  " + styUpdate.Render("⬆ "+m.latestVer))
+	}
 	b.WriteString("\n")
 	// Second line is either the search bar (when filtering) or a blank spacer,
 	// so the fixed line count stays the same.
@@ -805,7 +826,7 @@ func (m model) View() string {
 		b.WriteString("\n")
 	}
 	if m.flash != "" {
-		b.WriteString(styStatus.Render("  "+m.flash) + "\n")
+		b.WriteString(styStatus.Render(trunc("  "+m.flash, m.width)) + "\n")
 	}
 	var help string
 	if m.searching {
@@ -819,10 +840,22 @@ func (m model) View() string {
 		}
 		help += " · / search · s sort:" + m.sortLabel() + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
-	b.WriteString(styHelp.Render(help))
+	b.WriteString(styHelp.Render(trunc(help, m.width)))
 	// No trailing newline: a final "\n" would make Bubble Tea count an extra
 	// (empty) line, pushing the frame one row past the terminal height.
 	return b.String()
+}
+
+// trunc cuts s to at most n display runes (n<=0 means no limit), so a long
+// single-styled line can't wrap onto a second screen row.
+func trunc(s string, n int) string {
+	if n <= 0 {
+		return s
+	}
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }
 
 // searchLine renders the filter bar: the query (with a cursor while editing)
