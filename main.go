@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,6 +39,13 @@ const (
 	viewHistory
 )
 
+type sortMode int
+
+const (
+	sortAlpha  sortMode = iota // directory A→Z, then title A→Z
+	sortRecent                 // groups & rows by last-active, newest first
+)
+
 type rowKind int
 
 const (
@@ -58,6 +66,7 @@ type row struct {
 
 type model struct {
 	view     viewKind
+	sort     sortMode
 	sessions []Session
 	history  []HistEntry
 	rows     []row
@@ -103,6 +112,7 @@ func (m *model) rebuild() {
 		}
 	}
 	if m.view == viewActive {
+		m.sortSessions(m.sessions)
 		// Partition: focusable (has a Ghostty tab) vs detached (live but no tab).
 		var open, detached []Session
 		for _, s := range m.sessions {
@@ -123,6 +133,7 @@ func (m *model) rebuild() {
 			}
 		}
 	} else {
+		m.sortHistory(m.history)
 		for _, h := range m.history {
 			header(h.CWD)
 			rows = append(rows, row{kind: rowHist, hist: h})
@@ -130,6 +141,78 @@ func (m *model) rebuild() {
 	}
 	m.rows = rows
 	m.clampCursor()
+}
+
+// sortSessions orders sessions per the current sort mode, keeping each
+// directory's sessions contiguous so the grouped headers stay intact.
+func (m model) sortSessions(ss []Session) {
+	if m.sort == sortAlpha {
+		sort.SliceStable(ss, func(i, j int) bool {
+			if ss[i].CWD != ss[j].CWD {
+				return ss[i].CWD < ss[j].CWD
+			}
+			ti, tj := strings.ToLower(titleOr(ss[i].Title)), strings.ToLower(titleOr(ss[j].Title))
+			if ti != tj {
+				return ti < tj
+			}
+			return ss[i].UpdatedAt > ss[j].UpdatedAt
+		})
+		return
+	}
+	latest := map[string]int64{}
+	for _, s := range ss {
+		if s.UpdatedAt > latest[s.CWD] {
+			latest[s.CWD] = s.UpdatedAt
+		}
+	}
+	sort.SliceStable(ss, func(i, j int) bool {
+		if li, lj := latest[ss[i].CWD], latest[ss[j].CWD]; li != lj {
+			return li > lj
+		}
+		if ss[i].CWD != ss[j].CWD {
+			return ss[i].CWD < ss[j].CWD
+		}
+		return ss[i].UpdatedAt > ss[j].UpdatedAt
+	})
+}
+
+// sortHistory mirrors sortSessions for past sessions (activity = file mtime).
+func (m model) sortHistory(hs []HistEntry) {
+	if m.sort == sortAlpha {
+		sort.SliceStable(hs, func(i, j int) bool {
+			if hs[i].CWD != hs[j].CWD {
+				return hs[i].CWD < hs[j].CWD
+			}
+			ti, tj := strings.ToLower(titleOr(hs[i].Title)), strings.ToLower(titleOr(hs[j].Title))
+			if ti != tj {
+				return ti < tj
+			}
+			return hs[i].ModAt.After(hs[j].ModAt)
+		})
+		return
+	}
+	latest := map[string]time.Time{}
+	for _, h := range hs {
+		if h.ModAt.After(latest[h.CWD]) {
+			latest[h.CWD] = h.ModAt
+		}
+	}
+	sort.SliceStable(hs, func(i, j int) bool {
+		if li, lj := latest[hs[i].CWD], latest[hs[j].CWD]; !li.Equal(lj) {
+			return li.After(lj)
+		}
+		if hs[i].CWD != hs[j].CWD {
+			return hs[i].CWD < hs[j].CWD
+		}
+		return hs[i].ModAt.After(hs[j].ModAt)
+	})
+}
+
+func (m model) sortLabel() string {
+	if m.sort == sortRecent {
+		return "recent"
+	}
+	return "alpha"
 }
 
 // chromeRows is the number of fixed (non-list) lines the view draws:
@@ -249,6 +332,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.move(1)
 		case "tab", "1", "2", "left", "right", "h", "l":
 			return m.switchView(msg.String())
+		case "s":
+			if m.sort == sortAlpha {
+				m.sort = sortRecent
+			} else {
+				m.sort = sortAlpha
+			}
+			m.cursor = 0
+			m.top = 0
+			m.rebuild()
+			m.flash = "sort: " + m.sortLabel()
 		case "r":
 			if m.view == viewActive {
 				return m, loadActiveCmd()
@@ -512,7 +605,7 @@ func (m model) View() string {
 	} else {
 		help += "resume (new tab) · c copy cmd"
 	}
-	help += " · r refresh · q quit"
+	help += " · s sort:" + m.sortLabel() + " · r refresh · q quit"
 	b.WriteString(styHelp.Render(help) + "\n")
 	return b.String()
 }
