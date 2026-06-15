@@ -61,6 +61,7 @@ type model struct {
 	history  []HistEntry
 	rows     []row
 	cursor   int
+	top      int // index of first visible row (scroll offset)
 	width    int
 	height   int
 	flash    string
@@ -130,7 +131,48 @@ func (m *model) rebuild() {
 	m.clampCursor()
 }
 
+// chromeRows is the number of fixed (non-list) lines the view draws:
+// tab bar, blank, sticky-header line, blank-before-footer, help, and flash.
+func (m model) chromeRows() int {
+	n := 5 // tabbar, blank, sticky line, blank-before-footer, help
+	if m.flash != "" {
+		n++
+	}
+	return n
+}
+
+// visibleRows is how many list rows fit on screen. Returns all rows when the
+// window size isn't known yet (e.g. headless render) so nothing is hidden.
+func (m model) visibleRows() int {
+	if m.height <= 0 {
+		return len(m.rows)
+	}
+	v := m.height - m.chromeRows()
+	if v < 1 {
+		v = 1
+	}
+	return v
+}
+
+// adjustScroll keeps the cursor inside the visible window.
+func (m *model) adjustScroll() {
+	v := m.visibleRows()
+	if m.cursor < m.top {
+		m.top = m.cursor
+	}
+	if m.cursor >= m.top+v {
+		m.top = m.cursor - v + 1
+	}
+	if maxTop := len(m.rows) - v; m.top > maxTop {
+		m.top = maxTop
+	}
+	if m.top < 0 {
+		m.top = 0
+	}
+}
+
 func (m *model) clampCursor() {
+	defer m.adjustScroll()
 	if len(m.rows) == 0 {
 		m.cursor = 0
 		return
@@ -162,19 +204,21 @@ func (m *model) move(delta int) {
 	for {
 		i += delta
 		if i < 0 || i >= len(m.rows) {
-			return
+			break
 		}
 		if selectable(m.rows[i].kind) {
 			m.cursor = i
-			return
+			break
 		}
 	}
+	m.adjustScroll()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.adjustScroll()
 	case tickMsg:
 		cmds := []tea.Cmd{loadActiveCmd(), tickCmd()}
 		if m.view == viewHistory {
@@ -239,6 +283,7 @@ func (m model) switchView(key string) (tea.Model, tea.Cmd) {
 	}
 	m.view = target
 	m.cursor = 0
+	m.top = 0
 	m.flash = ""
 	m.pendingKill = 0
 	m.rebuild()
@@ -366,6 +411,26 @@ func (m model) View() string {
 	var b strings.Builder
 	b.WriteString(m.tabBar() + "\n\n")
 
+	// Sticky line: when scrolled, show the directory header that governs the
+	// first visible row (context) plus how many rows are hidden above.
+	if m.top > 0 {
+		sticky := -1
+		for j := m.top - 1; j >= 0; j-- {
+			if m.rows[j].kind == rowHeader {
+				sticky = j
+				break
+			}
+		}
+		hint := styHelp.Render(fmt.Sprintf("↑ %d more", m.top))
+		if sticky >= 0 {
+			b.WriteString(styHeader.Render(m.rows[sticky].header) + "  " + hint + "\n")
+		} else {
+			b.WriteString("  " + hint + "\n")
+		}
+	} else {
+		b.WriteString("\n")
+	}
+
 	if len(m.rows) == 0 {
 		if m.view == viewActive {
 			b.WriteString(styDim.Render("  no live sessions") + "\n")
@@ -374,7 +439,13 @@ func (m model) View() string {
 		}
 	}
 
-	for i, r := range m.rows {
+	v := m.visibleRows()
+	end := m.top + v
+	if end > len(m.rows) {
+		end = len(m.rows)
+	}
+	for i := m.top; i < end; i++ {
+		r := m.rows[i]
 		if r.kind == rowHeader {
 			b.WriteString(styHeader.Render(r.header) + "\n")
 			continue
@@ -424,7 +495,11 @@ func (m model) View() string {
 		}
 	}
 
-	b.WriteString("\n")
+	if end < len(m.rows) {
+		b.WriteString(styHelp.Render(fmt.Sprintf("  ↓ %d more", len(m.rows)-end)) + "\n")
+	} else {
+		b.WriteString("\n")
+	}
 	if m.flash != "" {
 		b.WriteString(styStatus.Render("  "+m.flash) + "\n")
 	}
