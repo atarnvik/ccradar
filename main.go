@@ -22,6 +22,7 @@ var (
 	styDim      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	styTitle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	styModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("103"))
+	stySearch   = lipgloss.NewStyle().Foreground(lipgloss.Color("227")).Bold(true)
 	styTab      = lipgloss.NewStyle().Foreground(lipgloss.Color("44"))
 	styCursor   = lipgloss.NewStyle().Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231")).Bold(true)
 	styHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -65,12 +66,14 @@ type row struct {
 }
 
 type model struct {
-	view     viewKind
-	sort     sortMode
-	sessions []Session
-	history  []HistEntry
-	rows     []row
-	cursor   int
+	view      viewKind
+	sort      sortMode
+	searching bool   // editing the search query
+	query     string // active fuzzy filter ("" = no filter)
+	sessions  []Session
+	history   []HistEntry
+	rows      []row
+	cursor    int
 	top      int // index of first visible row (scroll offset)
 	width    int
 	height   int
@@ -116,6 +119,9 @@ func (m *model) rebuild() {
 		// Partition: focusable (has a Ghostty tab) vs detached (live but no tab).
 		var open, detached []Session
 		for _, s := range m.sessions {
+			if !fuzzyMatch(m.query, sessionHay(s)) {
+				continue
+			}
 			if s.GhosttyID != "" {
 				open = append(open, s)
 			} else {
@@ -135,6 +141,9 @@ func (m *model) rebuild() {
 	} else {
 		m.sortHistory(m.history)
 		for _, h := range m.history {
+			if !fuzzyMatch(m.query, histHay(h)) {
+				continue
+			}
 			header(h.CWD)
 			rows = append(rows, row{kind: rowHist, hist: h})
 		}
@@ -213,6 +222,56 @@ func (m model) sortLabel() string {
 		return "recent"
 	}
 	return "alpha"
+}
+
+// sessionHay / histHay are the searchable text for a row: directory + title +
+// model, so a query can match the folder, the session name, or the model.
+func sessionHay(s Session) string {
+	return dirDisplay(s.CWD) + " " + titleOr(s.Title) + " " + modelShort(s.Model)
+}
+func histHay(h HistEntry) string {
+	return dirDisplay(h.CWD) + " " + titleOr(h.Title) + " " + modelShort(h.Model)
+}
+
+// fuzzyMatch reports whether every whitespace-separated token of query is a
+// case-insensitive subsequence of target (tokens AND together). Empty query
+// always matches.
+func fuzzyMatch(query, target string) bool {
+	t := strings.ToLower(target)
+	for _, tok := range strings.Fields(strings.ToLower(query)) {
+		if !subsequence(tok, t) {
+			return false
+		}
+	}
+	return true
+}
+
+// subsequence reports whether all runes of q appear in t in order.
+func subsequence(q, t string) bool {
+	qr := []rune(q)
+	if len(qr) == 0 {
+		return true
+	}
+	qi := 0
+	for _, tr := range t {
+		if tr == qr[qi] {
+			if qi++; qi == len(qr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// matchCount is the number of selectable (session/hist) rows currently shown.
+func (m model) matchCount() int {
+	n := 0
+	for _, r := range m.rows {
+		if selectable(r.kind) {
+			n++
+		}
+	}
+	return n
 }
 
 // chromeRows is the number of fixed (non-list) lines the view draws:
@@ -320,12 +379,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.rebuild()
 		}
 	case tea.KeyMsg:
+		if m.searching {
+			return m.handleSearchKey(msg)
+		}
 		if msg.String() != "x" {
 			m.pendingKill = 0 // any other key cancels a pending kill
 		}
 		switch msg.String() {
-		case "q", "ctrl+c", "esc":
+		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "esc":
+			if m.query != "" { // first esc clears an active filter
+				m.query = ""
+				m.cursor, m.top = 0, 0
+				m.rebuild()
+				m.flash = ""
+				return m, nil
+			}
+			return m, tea.Quit
+		case "/":
+			m.searching = true
+			m.pendingKill = 0
+			m.flash = ""
 		case "up", "k":
 			m.move(-1)
 		case "down", "j":
@@ -355,6 +430,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.killSelected()
 		}
 	}
+	return m, nil
+}
+
+// handleSearchKey processes keys while the search query is being edited.
+func (m model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEnter:
+		m.searching = false // keep the filter, return to navigation
+		return m, nil
+	case tea.KeyEsc:
+		m.searching = false // cancel: drop the filter entirely
+		m.query = ""
+		m.cursor, m.top = 0, 0
+		m.rebuild()
+		return m, nil
+	case tea.KeyUp:
+		m.move(-1)
+		return m, nil
+	case tea.KeyDown:
+		m.move(1)
+		return m, nil
+	case tea.KeyBackspace, tea.KeyDelete:
+		if r := []rune(m.query); len(r) > 0 {
+			m.query = string(r[:len(r)-1])
+		}
+	case tea.KeyCtrlU:
+		m.query = ""
+	case tea.KeySpace:
+		m.query += " "
+	case tea.KeyRunes:
+		m.query += string(msg.Runes)
+	default:
+		return m, nil
+	}
+	m.cursor, m.top = 0, 0
+	m.rebuild()
 	return m, nil
 }
 
@@ -503,7 +616,14 @@ func (m model) tabBar() string {
 
 func (m model) View() string {
 	var b strings.Builder
-	b.WriteString(m.tabBar() + "\n\n")
+	b.WriteString(m.tabBar() + "\n")
+	// Second line is either the search bar (when filtering) or a blank spacer,
+	// so the fixed line count stays the same.
+	if m.searching || m.query != "" {
+		b.WriteString(m.searchLine() + "\n")
+	} else {
+		b.WriteString("\n")
+	}
 
 	// Sticky line: when scrolled, show the directory header that governs the
 	// first visible row (context) plus how many rows are hidden above.
@@ -526,11 +646,14 @@ func (m model) View() string {
 	}
 
 	if len(m.rows) == 0 {
-		if m.view == viewActive {
-			b.WriteString(styDim.Render("  no live sessions") + "\n")
-		} else {
-			b.WriteString(styDim.Render("  no past sessions") + "\n")
+		msg := "no live sessions"
+		if m.view != viewActive {
+			msg = "no past sessions"
 		}
+		if m.query != "" {
+			msg = "no matches for “" + m.query + "”"
+		}
+		b.WriteString(styDim.Render("  "+msg) + "\n")
 	}
 
 	v := m.visibleRows()
@@ -599,15 +722,36 @@ func (m model) View() string {
 	if m.flash != "" {
 		b.WriteString(styStatus.Render("  "+m.flash) + "\n")
 	}
-	help := "  ↑/↓ move · tab switch view · enter "
-	if m.view == viewActive {
-		help += "focus tab · x kill detached"
+	var help string
+	if m.searching {
+		help = "  type to filter · enter accept · esc clear · ↑/↓ move"
 	} else {
-		help += "resume (new tab) · c copy cmd"
+		help = "  ↑/↓ move · tab switch view · enter "
+		if m.view == viewActive {
+			help += "focus tab · x kill detached"
+		} else {
+			help += "resume (new tab) · c copy cmd"
+		}
+		help += " · / search · s sort:" + m.sortLabel() + " · r refresh · q quit"
 	}
-	help += " · s sort:" + m.sortLabel() + " · r refresh · q quit"
 	b.WriteString(styHelp.Render(help) + "\n")
 	return b.String()
+}
+
+// searchLine renders the filter bar: the query (with a cursor while editing)
+// and how many rows currently match.
+func (m model) searchLine() string {
+	cursor := ""
+	if m.searching {
+		cursor = "▌"
+	}
+	n := m.matchCount()
+	unit := "matches"
+	if n == 1 {
+		unit = "match"
+	}
+	return stySearch.Render("  /"+m.query+cursor) +
+		styHelp.Render(fmt.Sprintf("   %d %s", n, unit))
 }
 
 // ---- entry ----

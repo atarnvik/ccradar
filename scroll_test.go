@@ -49,6 +49,49 @@ func TestSortModes(t *testing.T) {
 	}
 }
 
+func TestFuzzyMatch(t *testing.T) {
+	cases := []struct {
+		q, target string
+		want      bool
+	}{
+		{"", "anything", true},                   // empty matches all
+		{"math", "Review retirement math", true}, // substring
+		{"rtmath", "retirement math", true},      // subsequence across words
+		{"fire math", "~/dev/firefly Review math", true}, // two tokens AND
+		{"fire xyz", "~/dev/firefly Review math", false}, // one token misses
+		{"OPUS", "model opus-4-8", true},                 // case-insensitive
+		{"zzz", "nothing here", false},
+	}
+	for _, c := range cases {
+		if got := fuzzyMatch(c.q, c.target); got != c.want {
+			t.Errorf("fuzzyMatch(%q,%q)=%v want %v", c.q, c.target, got, c.want)
+		}
+	}
+}
+
+func TestSearchFiltersRows(t *testing.T) {
+	m := model{view: viewActive, width: 80, height: 40}
+	m.sessions = []Session{
+		{CWD: "/dev/firefly", Title: "retirement math", UpdatedAt: 1, GhosttyID: "g"},
+		{CWD: "/dev/ccradar", Title: "build dashboard", UpdatedAt: 2, GhosttyID: "g"},
+	}
+	m.query = "fire"
+	m.rebuild()
+	if got := m.matchCount(); got != 1 {
+		t.Fatalf("query %q: matchCount=%d want 1", m.query, got)
+	}
+	m.query = "dash"
+	m.rebuild()
+	if got := m.matchCount(); got != 1 {
+		t.Fatalf("query %q: matchCount=%d want 1", m.query, got)
+	}
+	m.query = ""
+	m.rebuild()
+	if got := m.matchCount(); got != 2 {
+		t.Fatalf("no query: matchCount=%d want 2", got)
+	}
+}
+
 func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
 	m := model{width: 80, height: 14}
 	m.rows = mkRows(30)
