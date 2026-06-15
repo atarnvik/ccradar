@@ -885,6 +885,9 @@ func main() {
 		case "-h", "--help", "help":
 			printUsage()
 			return
+		case "-v", "--version", "version":
+			fmt.Println(displayVersion())
+			return
 		default:
 			path = a // a directory to scope to
 		}

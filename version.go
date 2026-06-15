@@ -14,9 +14,20 @@ import (
 // — the same source `go install …@latest` consults. No auth, no GitHub rate limits.
 const moduleProxyLatest = "https://proxy.golang.org/github.com/atarnvik/ccradar/@latest"
 
-// currentVersion is the installed module version (e.g. "v0.2.1"), or "" for a
-// local/dev build where there's nothing to compare against.
+// version is injected at release time via -ldflags "-X main.version=...".
+// (GoReleaser builds with `go build`, so runtime build info has no tag.)
+var version string
+
+// currentVersion is the running version (e.g. "v0.2.1"), or "" for a local/dev
+// build where there's nothing to compare against. It prefers the ldflags value
+// and falls back to module build info (the `go install …@version` path).
 func currentVersion() string {
+	if version != "" {
+		if !strings.HasPrefix(version, "v") {
+			return "v" + version
+		}
+		return version
+	}
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
 		return ""
@@ -26,6 +37,14 @@ func currentVersion() string {
 		return ""
 	}
 	return v
+}
+
+// displayVersion is the human-readable version for `ccradar --version`.
+func displayVersion() string {
+	if v := currentVersion(); v != "" {
+		return "ccradar " + v
+	}
+	return "ccradar (dev build)"
 }
 
 // latestVersion asks the module proxy for the newest published version.
