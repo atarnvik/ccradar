@@ -21,8 +21,12 @@ type HistEntry struct {
 }
 
 // histScanLimit caps how many recent transcripts we parse, so a big history
-// directory stays snappy.
-const histScanLimit = 80
+// directory stays snappy. When scoped to a directory we scan deeper (histScan
+// LimitFiltered) since most transcripts won't match the filter.
+const (
+	histScanLimit         = 80
+	histScanLimitFiltered = 500
+)
 
 // loadHistory returns recent past sessions (most-recent transcripts first),
 // excluding any session id currently live.
@@ -45,20 +49,29 @@ func loadHistory(activeIDs map[string]bool) []HistEntry {
 		pm = append(pm, pathMod{p, fi.ModTime()})
 	}
 	sort.Slice(pm, func(i, j int) bool { return pm[i].mod.After(pm[j].mod) })
-	if len(pm) > histScanLimit {
-		pm = pm[:histScanLimit]
+
+	// Read most-recent transcripts first, stopping once we have histScanLimit
+	// matching results or have read the (filter-dependent) cap of files.
+	readCap := histScanLimit
+	if dirFilter != "" {
+		readCap = histScanLimitFiltered
 	}
 
 	var out []HistEntry
+	reads := 0
 	for _, e := range pm {
+		if reads >= readCap || len(out) >= histScanLimit {
+			break
+		}
 		sid := filepath.Base(e.path)
 		sid = sid[:len(sid)-len(".jsonl")]
 		if activeIDs[sid] {
 			continue
 		}
+		reads++
 		cwd, title, model := readTranscript(e.path)
-		if cwd == "" {
-			continue // can't resume without a directory
+		if cwd == "" || !underFilter(cwd) {
+			continue // need a directory, and it must be within the filter
 		}
 		out = append(out, HistEntry{SessionID: sid, CWD: cwd, Title: title, Model: model, ModAt: e.mod})
 	}

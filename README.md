@@ -28,7 +28,8 @@ local data and drives Ghostty through its AppleScript API. No daemon, no network
 
 ```sh
 go install github.com/atarnvik/ccradar@latest
-ccradar
+ccradar              # all sessions
+ccradar ~/src/app    # only sessions in that directory and its subdirectories
 ```
 
 Or build from source:

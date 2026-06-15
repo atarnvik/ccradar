@@ -679,7 +679,11 @@ func (m model) tabBar() string {
 
 func (m model) View() string {
 	var b strings.Builder
-	b.WriteString(m.tabBar() + "\n")
+	b.WriteString(m.tabBar())
+	if dirFilter != "" {
+		b.WriteString("  " + styDim.Render("⌂ "+dirDisplay(dirFilter)))
+	}
+	b.WriteString("\n")
 	// Second line is either the search bar (when filtering) or a blank spacer,
 	// so the fixed line count stays the same.
 	if m.searching || m.query != "" {
@@ -820,8 +824,23 @@ func (m model) searchLine() string {
 // ---- entry ----
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "dump" || os.Args[1] == "render") {
-		debugMode(os.Args[1])
+	var mode, path string
+	for _, a := range os.Args[1:] {
+		switch a {
+		case "dump", "render":
+			mode = a
+		case "-h", "--help", "help":
+			printUsage()
+			return
+		default:
+			path = a // a directory to scope to
+		}
+	}
+	if path != "" {
+		setDirFilter(path)
+	}
+	if mode != "" {
+		debugMode(mode)
 		return
 	}
 	cfg := loadConfig()
@@ -829,6 +848,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func printUsage() {
+	fmt.Println(`ccradar — Claude Code session dashboard for Ghostty
+
+Usage:
+  ccradar [dir]      scope to a directory and its subdirectories (e.g. ccradar ~/src/app)
+  ccradar            show all sessions
+
+Keys: ↑/↓ move · tab switch view · / search · s sort · n notify · enter focus/resume · q quit`)
 }
 
 func debugMode(which string) {
