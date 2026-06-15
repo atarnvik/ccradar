@@ -1,0 +1,62 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+)
+
+// notifyScript posts a macOS notification. Arguments are passed via argv so no
+// AppleScript string escaping is needed (unicode-safe).
+const notifyScript = `on run argv
+	display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"
+end run`
+
+// sendNotification posts a native notification; failures are silently ignored
+// (e.g. notification permission not yet granted). It prefers terminal-notifier
+// (its own app identity → reliable banners) and falls back to osascript, which
+// is delivered under Script Editor's identity.
+func sendNotification(title, body string) {
+	if title == "" {
+		title = "ccradar"
+	}
+	if path, err := exec.LookPath("terminal-notifier"); err == nil {
+		_ = exec.Command(path, "-title", title, "-message", body, "-sound", "Glass").Run()
+		return
+	}
+	_ = exec.Command("osascript", "-e", notifyScript, title, body).Run()
+}
+
+// ---- persisted preferences ----
+
+type config struct {
+	Notify bool `json:"notify"`
+}
+
+func configPath() string {
+	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+		return filepath.Join(d, "ccradar", "config.json")
+	}
+	return filepath.Join(homeDir(), ".config", "ccradar", "config.json")
+}
+
+// loadConfig reads saved preferences, defaulting notifications to on.
+func loadConfig() config {
+	c := config{Notify: true}
+	b, err := os.ReadFile(configPath())
+	if err != nil {
+		return c
+	}
+	_ = json.Unmarshal(b, &c)
+	return c
+}
+
+// saveConfig persists preferences; errors are ignored (best-effort).
+func saveConfig(c config) {
+	p := configPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	if b, err := json.MarshalIndent(c, "", "  "); err == nil {
+		_ = os.WriteFile(p, b, 0o644)
+	}
+}
