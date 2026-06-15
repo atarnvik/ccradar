@@ -25,7 +25,8 @@ type Session struct {
 	UpdatedAt int64 // ms epoch
 	Title     string
 	Model     string // model of the last non-sidechain assistant turn
-	GhosttyID string // matched Ghostty terminal id; "" if no tab found
+	Tty       string // controlling tty of the process (for exact surface matching)
+	SurfaceID string // matched terminal surface id; "" if no tab found
 }
 
 func homeDir() string { h, _ := os.UserHomeDir(); return h }
@@ -107,7 +108,7 @@ func loadSessions() []Session {
 	if err != nil {
 		return nil
 	}
-	terms := ghosttyTerminals()
+	terms := activeDriver().Surfaces()
 	used := map[string]bool{}
 
 	var out []Session
@@ -137,7 +138,8 @@ func loadSessions() []Session {
 			UpdatedAt: rf.UpdatedAt,
 		}
 		s.Title, s.Model = metaFor(rf.SessionID)
-		s.GhosttyID = matchTerminal(terms, used, s.CWD, s.Title)
+		s.Tty = procTty(rf.PID)
+		s.SurfaceID = matchTerminal(terms, used, s)
 		out = append(out, s)
 	}
 

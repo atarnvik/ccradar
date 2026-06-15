@@ -166,7 +166,7 @@ func (m *model) rebuild() {
 			if !fuzzyMatch(m.query, sessionHay(s)) {
 				continue
 			}
-			if s.GhosttyID != "" {
+			if s.SurfaceID != "" {
 				open = append(open, s)
 			} else {
 				detached = append(detached, s)
@@ -570,14 +570,14 @@ func (m *model) activate() {
 	r := m.rows[m.cursor]
 	switch r.kind {
 	case rowSession:
-		if r.session.GhosttyID != "" {
-			_ = focusTerminal(r.session.GhosttyID)
+		if r.session.SurfaceID != "" {
+			_ = activeDriver().Focus(r.session.SurfaceID)
 			m.flash = "→ focused " + filepath.Base(r.session.CWD)
 		} else {
 			m.flash = fmt.Sprintf("detached (pid %d) — no tab to focus; press x to kill", r.session.PID)
 		}
 	case rowHist:
-		if err := openResumeTab(r.hist.CWD, r.hist.SessionID); err != nil {
+		if err := activeDriver().OpenResume(r.hist.CWD, r.hist.SessionID); err != nil {
 			_ = copyResumeCommand(r.hist.CWD, r.hist.SessionID)
 			m.flash = "couldn't open tab — resume command copied to clipboard"
 		} else {
@@ -591,7 +591,7 @@ func (m *model) killSelected() {
 		return
 	}
 	r := m.rows[m.cursor]
-	if r.kind != rowSession || r.session.GhosttyID != "" {
+	if r.kind != rowSession || r.session.SurfaceID != "" {
 		m.flash = "x only kills detached (no-tab) sessions"
 		return
 	}
@@ -660,7 +660,7 @@ func truncPad(s string, n int) string {
 func (m model) tabBar() string {
 	open, detached := 0, 0
 	for _, s := range m.sessions {
-		if s.GhosttyID != "" {
+		if s.SurfaceID != "" {
 			open++
 		} else {
 			detached++
@@ -680,8 +680,9 @@ func (m model) tabBar() string {
 func (m model) View() string {
 	var b strings.Builder
 	b.WriteString(m.tabBar())
+	b.WriteString("  " + styDim.Render("via "+activeDriver().Name()))
 	if dirFilter != "" {
-		b.WriteString("  " + styDim.Render("⌂ "+dirDisplay(dirFilter)))
+		b.WriteString(styDim.Render("  ⌂ " + dirDisplay(dirFilter)))
 	}
 	b.WriteString("\n")
 	// Second line is either the search bar (when filtering) or a blank spacer,
@@ -749,7 +750,7 @@ func (m model) View() string {
 			age := fmt.Sprintf("%4s", fmtAge(nowMs()-s.UpdatedAt))
 			titleF := truncPad(titleOr(s.Title), 40)
 			mdl := truncPad(modelShort(s.Model), 10)
-			if s.GhosttyID != "" {
+			if s.SurfaceID != "" {
 				loc := "→ tab"
 				plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
 				colored = fmt.Sprintf("%s %s  %s  %s  %s",
@@ -857,6 +858,9 @@ Usage:
   ccradar [dir]      scope to a directory and its subdirectories (e.g. ccradar ~/src/app)
   ccradar            show all sessions
 
+Terminal: auto-detected from $TERM_PROGRAM (Ghostty, iTerm2, Terminal.app).
+Override with CCRADAR_TERM=ghostty|iterm|terminal.
+
 Keys: ↑/↓ move · tab switch view · / search · s sort · n notify · enter focus/resume · q quit`)
 }
 
@@ -865,7 +869,7 @@ func debugMode(which string) {
 	if which == "dump" {
 		fmt.Println("# active")
 		for _, s := range sessions {
-			tab := s.GhosttyID
+			tab := s.SurfaceID
 			if tab == "" {
 				tab = "[no tab]"
 			}
