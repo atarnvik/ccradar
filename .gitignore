@@ -1,0 +1,12 @@
+# built binary (go install / go build -o ccradar)
+/ccradar
+
+# macOS
+.DS_Store
+
+# go test artifacts
+*.test
+*.out
+
+# local Claude Code state
+.claude/
