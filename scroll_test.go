@@ -92,6 +92,29 @@ func TestSearchFiltersRows(t *testing.T) {
 	}
 }
 
+func TestObserveBusyToIdle(t *testing.T) {
+	m := model{notify: true}
+	busy := []Session{{SessionID: "a", Status: "busy", CWD: "/x"}}
+	idle := []Session{{SessionID: "a", Status: "idle", CWD: "/x"}}
+
+	if cmds := m.observe(busy); len(cmds) != 0 {
+		t.Fatalf("first observe should not notify, got %d", len(cmds))
+	}
+	if cmds := m.observe(idle); len(cmds) != 1 {
+		t.Fatalf("busy→idle should notify once, got %d", len(cmds))
+	}
+	if cmds := m.observe(idle); len(cmds) != 0 {
+		t.Fatalf("idle→idle should not notify, got %d", len(cmds))
+	}
+
+	// busy→idle but notifications off → nothing
+	m.notify = false
+	m.observe(busy)
+	if cmds := m.observe(idle); len(cmds) != 0 {
+		t.Fatalf("notify off should not notify, got %d", len(cmds))
+	}
+}
+
 func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
 	m := model{width: 80, height: 14}
 	m.rows = mkRows(30)

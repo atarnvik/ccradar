@@ -66,14 +66,16 @@ type row struct {
 }
 
 type model struct {
-	view      viewKind
-	sort      sortMode
-	searching bool   // editing the search query
-	query     string // active fuzzy filter ("" = no filter)
-	sessions  []Session
-	history   []HistEntry
-	rows      []row
-	cursor    int
+	view       viewKind
+	sort       sortMode
+	searching  bool   // editing the search query
+	query      string // active fuzzy filter ("" = no filter)
+	notify     bool   // send a notification on busy→idle
+	prevStatus map[string]string // sessionID → last seen status (transition tracking)
+	sessions   []Session
+	history    []HistEntry
+	rows       []row
+	cursor     int
 	top      int // index of first visible row (scroll offset)
 	width    int
 	height   int
@@ -96,6 +98,48 @@ func loadHistCmd(activeIDs map[string]bool) tea.Cmd {
 }
 
 func (m model) Init() tea.Cmd { return tea.Batch(loadActiveCmd(), tickCmd()) }
+
+// observe diffs the incoming sessions against the last seen statuses and returns
+// notification commands for any busy→idle transition (when notifications are on).
+// prevStatus is always refreshed so toggling notify on never misfires on history.
+func (m *model) observe(next []Session) []tea.Cmd {
+	var cmds []tea.Cmd
+	cur := make(map[string]string, len(next))
+	for _, s := range next {
+		cur[s.SessionID] = s.Status
+		if m.notify {
+			if prev, ok := m.prevStatus[s.SessionID]; ok && prev == "busy" && s.Status == "idle" {
+				cmds = append(cmds, notifyCmd(notifTitle(s), notifBody(s)))
+			}
+		}
+	}
+	m.prevStatus = cur
+	return cmds
+}
+
+func notifyCmd(title, body string) tea.Cmd {
+	return func() tea.Msg {
+		sendNotification(title, body)
+		return nil
+	}
+}
+
+// notifTitle / notifBody avoid repeating the directory: when a session has an
+// AI title, that headlines the notification and the body carries the status +
+// directory; otherwise the status headlines and the directory is the body.
+func notifTitle(s Session) string {
+	if s.Title != "" {
+		return s.Title
+	}
+	return "✓ Claude finished responding"
+}
+
+func notifBody(s Session) string {
+	if s.Title != "" {
+		return "✓ finished · " + filepath.Base(s.CWD)
+	}
+	return filepath.Base(s.CWD)
+}
 
 func dirDisplay(cwd string) string {
 	home := homeDir()
@@ -222,6 +266,13 @@ func (m model) sortLabel() string {
 		return "recent"
 	}
 	return "alpha"
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 // sessionHay / histHay are the searchable text for a row: directory + title +
@@ -369,9 +420,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case loadedMsg:
+		cmds := m.observe([]Session(msg)) // detect busy→idle before swapping in
 		m.sessions = []Session(msg)
 		if m.view == viewActive {
 			m.rebuild()
+		}
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...)
 		}
 	case histMsg:
 		m.history = []HistEntry(msg)
@@ -417,6 +472,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.top = 0
 			m.rebuild()
 			m.flash = "sort: " + m.sortLabel()
+		case "n":
+			m.notify = !m.notify
+			saveConfig(config{Notify: m.notify})
+			if m.notify {
+				m.flash = "notifications on (when Claude finishes)"
+			} else {
+				m.flash = "notifications off"
+			}
 		case "r":
 			if m.view == viewActive {
 				return m, loadActiveCmd()
@@ -732,7 +795,7 @@ func (m model) View() string {
 		} else {
 			help += "resume (new tab) · c copy cmd"
 		}
-		help += " · / search · s sort:" + m.sortLabel() + " · r refresh · q quit"
+		help += " · / search · s sort:" + m.sortLabel() + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
 	b.WriteString(styHelp.Render(help) + "\n")
 	return b.String()
@@ -761,7 +824,8 @@ func main() {
 		debugMode(os.Args[1])
 		return
 	}
-	if _, err := tea.NewProgram(model{}, tea.WithAltScreen()).Run(); err != nil {
+	cfg := loadConfig()
+	if _, err := tea.NewProgram(model{notify: cfg.Notify}, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
