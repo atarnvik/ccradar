@@ -1,0 +1,53 @@
+version: 2
+project_name: ccradar
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ccradar
+    main: .
+    binary: ccradar
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin # macOS only — ccradar drives terminals via AppleScript
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: ccradar
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+
+checksum:
+  name_template: "checksums.txt"
+
+# release-please creates the GitHub Release + tag; GoReleaser uploads the
+# binaries/checksums onto that existing release.
+release:
+  mode: append
+
+homebrew_casks:
+  - name: ccradar
+    repository:
+      owner: atarnvik
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/atarnvik/ccradar"
+    description: "Dashboard to find, focus, and resume Claude Code sessions across terminals"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    # The binary isn't notarized, so strip the quarantine flag on install or
+    # Gatekeeper will block it ("developer cannot be verified").
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ccradar"]
+          end

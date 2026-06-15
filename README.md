@@ -33,10 +33,24 @@ data and drives your terminal through its AppleScript API. No daemon, no network
 
 ## Install
 
+**Homebrew** (no Go needed):
+
+```sh
+brew install atarnvik/tap/ccradar
+```
+
+**Go:**
+
 ```sh
 go install github.com/atarnvik/ccradar@latest
+```
+
+Then:
+
+```sh
 ccradar              # all sessions
 ccradar ~/src/app    # only sessions in that directory and its subdirectories
+ccradar --version    # print the installed version
 ```
 
 Or build from source:

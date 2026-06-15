@@ -1,6 +1,9 @@
 # built binary (go install / go build -o ccradar)
 /ccradar
 
+# goreleaser output
+/dist/
+
 # macOS
 .DS_Store
 
