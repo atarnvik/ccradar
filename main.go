@@ -363,6 +363,21 @@ func (m *model) adjustScroll() {
 	if m.top < 0 {
 		m.top = 0
 	}
+	// Don't strand only-header rows above the window: if nothing selectable is
+	// hidden above the cursor, pull the top up so those headers reappear (this
+	// is what lets you scroll fully back to the top).
+	if m.top > 0 && m.cursor < v {
+		selectableAbove := false
+		for i := 0; i < m.top; i++ {
+			if selectable(m.rows[i].kind) {
+				selectableAbove = true
+				break
+			}
+		}
+		if !selectableAbove {
+			m.top = 0
+		}
+	}
 }
 
 func (m *model) clampCursor() {
@@ -736,7 +751,8 @@ func (m model) View() string {
 			continue
 		}
 		if r.kind == rowDivider {
-			b.WriteString("\n" + styHelp.Render("  ── "+r.header+" ──") + "\n")
+			// Single line so every windowed row is exactly one screen line.
+			b.WriteString(styHelp.Render("  ── "+r.header+" ──") + "\n")
 			continue
 		}
 
@@ -771,12 +787,13 @@ func (m model) View() string {
 		}
 
 		if i == m.cursor {
+			// Pad/truncate to an exact width so the bar fills the row and never
+			// wraps onto a second line (which would overflow the viewport).
 			text := "▸ " + plain
-			sel := styCursor
 			if m.width > 2 {
-				sel = sel.Width(m.width - 2) // fill the row for a solid bar
+				text = truncPad(text, m.width-2)
 			}
-			b.WriteString("  " + sel.Render(text) + "\n")
+			b.WriteString("  " + styCursor.Render(text) + "\n")
 		} else {
 			b.WriteString("    " + colored + "\n")
 		}
@@ -802,7 +819,9 @@ func (m model) View() string {
 		}
 		help += " · / search · s sort:" + m.sortLabel() + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
-	b.WriteString(styHelp.Render(help) + "\n")
+	b.WriteString(styHelp.Render(help))
+	// No trailing newline: a final "\n" would make Bubble Tea count an extra
+	// (empty) line, pushing the frame one row past the terminal height.
 	return b.String()
 }
 

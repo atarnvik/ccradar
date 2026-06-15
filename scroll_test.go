@@ -12,11 +12,26 @@ func mkRows(n int) []row {
 		if i%5 == 0 {
 			rs = append(rs, row{kind: rowHeader, header: fmt.Sprintf("~/dir-%d", i/5)})
 		}
+		if i == n/2 {
+			rs = append(rs, row{kind: rowDivider, header: "detached"}) // 2-line risk
+		}
 		rs = append(rs, row{kind: rowSession, session: Session{
 			Status: "idle", CWD: "/x", Title: fmt.Sprintf("sess %d", i), SurfaceID: "g",
 		}})
 	}
 	return rs
+}
+
+// renderedLines is how many screen lines a frame occupies (no trailing newline).
+func renderedLines(out string) int { return strings.Count(out, "\n") + 1 }
+
+func firstSelectable(rows []row) int {
+	for i, r := range rows {
+		if selectable(r.kind) {
+			return i
+		}
+	}
+	return -1
 }
 
 func TestSortModes(t *testing.T) {
@@ -190,21 +205,30 @@ func TestUnderFilter(t *testing.T) {
 }
 
 func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
-	m := model{width: 80, height: 14}
-	m.rows = mkRows(30)
-	m.adjustScroll()
-	// walk all the way down then back up
-	for _, dir := range []int{1, -1} {
-		for step := 0; step < 40; step++ {
-			out := m.View()
-			if lines := strings.Count(out, "\n"); lines > m.height {
-				t.Fatalf("overflow: %d lines > height %d (cursor=%d top=%d)", lines, m.height, m.cursor, m.top)
+	for _, height := range []int{10, 14, 25, 40} {
+		m := model{width: 80, height: height}
+		m.rows = mkRows(30)
+		m.adjustScroll()
+		// walk all the way down then back up
+		for _, dir := range []int{1, -1} {
+			for step := 0; step < 50; step++ {
+				out := m.View()
+				if lines := renderedLines(out); lines > m.height {
+					t.Fatalf("overflow @h=%d: %d lines (cursor=%d top=%d)", m.height, lines, m.cursor, m.top)
+				}
+				v := m.visibleRows()
+				if m.cursor < m.top || m.cursor >= m.top+v {
+					t.Fatalf("cursor offscreen @h=%d: cursor=%d not in [%d,%d)", m.height, m.cursor, m.top, m.top+v)
+				}
+				m.move(dir)
 			}
-			v := m.visibleRows()
-			if m.cursor < m.top || m.cursor >= m.top+v {
-				t.Fatalf("cursor offscreen: cursor=%d not in [%d,%d)", m.cursor, m.top, m.top+v)
-			}
-			m.move(dir)
+		}
+		// after walking all the way up, the cursor must be back at the top row
+		if want := firstSelectable(m.rows); m.cursor != want {
+			t.Fatalf("@h=%d couldn't return to top: cursor=%d want %d", m.height, m.cursor, want)
+		}
+		if m.top != 0 {
+			t.Fatalf("@h=%d scrolled-up view should have top=0, got %d", m.height, m.top)
 		}
 	}
 }
