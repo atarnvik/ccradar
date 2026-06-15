@@ -16,6 +16,7 @@ type HistEntry struct {
 	SessionID string
 	CWD       string
 	Title     string
+	Model     string    // model of the last non-sidechain assistant turn
 	ModAt     time.Time // transcript file mtime ≈ last activity
 }
 
@@ -55,11 +56,11 @@ func loadHistory(activeIDs map[string]bool) []HistEntry {
 		if activeIDs[sid] {
 			continue
 		}
-		cwd, title := readTranscript(e.path)
+		cwd, title, model := readTranscript(e.path)
 		if cwd == "" {
 			continue // can't resume without a directory
 		}
-		out = append(out, HistEntry{SessionID: sid, CWD: cwd, Title: title, ModAt: e.mod})
+		out = append(out, HistEntry{SessionID: sid, CWD: cwd, Title: title, Model: model, ModAt: e.mod})
 	}
 
 	// group-friendly: by directory, then most recent first within a directory
@@ -72,11 +73,12 @@ func loadHistory(activeIDs map[string]bool) []HistEntry {
 	return out
 }
 
-// readTranscript does a single pass to grab the first cwd and the last ai-title.
-func readTranscript(path string) (cwd, title string) {
+// readTranscript does a single pass to grab the first cwd, the last ai-title,
+// and the model of the last non-sidechain assistant turn.
+func readTranscript(path string) (cwd, title, model string) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	defer f.Close()
 
@@ -92,16 +94,14 @@ func readTranscript(path string) (cwd, title string) {
 				cwd = r.Cwd
 			}
 		}
-		if bytes.Contains(line, []byte(`"type":"ai-title"`)) {
-			var r struct {
-				AiTitle string `json:"aiTitle"`
-			}
-			if json.Unmarshal(line, &r) == nil && r.AiTitle != "" {
-				title = r.AiTitle
-			}
+		if t, ok := scanTitle(line); ok {
+			title = t
+		}
+		if mdl, ok := scanModel(line); ok {
+			model = mdl
 		}
 	}
-	return cwd, title
+	return cwd, title, model
 }
 
 // activeSessionIDs returns the set of session ids backed by a live process.

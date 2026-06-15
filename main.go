@@ -20,6 +20,7 @@ var (
 	styWait     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	styDim      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	styTitle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	styModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("103"))
 	styTab      = lipgloss.NewStyle().Foreground(lipgloss.Color("44"))
 	styCursor   = lipgloss.NewStyle().Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231")).Bold(true)
 	styHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -463,24 +464,26 @@ func (m model) View() string {
 			s := r.session
 			sp, sst := statusText(s.Status)
 			age := fmt.Sprintf("%4s", fmtAge(nowMs()-s.UpdatedAt))
-			titleF := truncPad(titleOr(s.Title), 44)
+			titleF := truncPad(titleOr(s.Title), 40)
+			mdl := truncPad(modelShort(s.Model), 10)
 			if s.GhosttyID != "" {
 				loc := "→ tab"
-				plain = fmt.Sprintf("%s %s  %s  %s", sp, age, titleF, loc)
-				colored = fmt.Sprintf("%s %s  %s  %s",
-					sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), styTab.Render(loc))
+				plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
+				colored = fmt.Sprintf("%s %s  %s  %s  %s",
+					sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(loc))
 			} else {
 				loc := fmt.Sprintf("pid %d", s.PID)
-				plain = fmt.Sprintf("%s %s  %s  %s", sp, age, titleF, loc)
+				plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
 				colored = styDim.Render(plain) // detached: muted whole row
 			}
 		case rowHist:
 			h := r.hist
 			age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
-			titleF := truncPad(titleOr(h.Title), 44)
-			plain = fmt.Sprintf("%s  %s  %s", age, titleF, "↻ resume")
-			colored = fmt.Sprintf("%s  %s  %s",
-				styDim.Render(age), styTitle.Render(titleF), styTab.Render("↻ resume"))
+			titleF := truncPad(titleOr(h.Title), 40)
+			mdl := truncPad(modelShort(h.Model), 10)
+			plain = fmt.Sprintf("%s  %s  %s  %s", age, titleF, mdl, "↻ resume")
+			colored = fmt.Sprintf("%s  %s  %s  %s",
+				styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render("↻ resume"))
 		}
 
 		if i == m.cursor {
@@ -536,13 +539,13 @@ func debugMode(which string) {
 			if tab == "" {
 				tab = "[no tab]"
 			}
-			fmt.Printf("%-7s %4s  %-22s %-46s %s\n",
-				s.Status, fmtAge(nowMs()-s.UpdatedAt), filepath.Base(s.CWD), titleOr(s.Title), tab)
+			fmt.Printf("%-7s %4s  %-22s %-10s %-46s %s\n",
+				s.Status, fmtAge(nowMs()-s.UpdatedAt), filepath.Base(s.CWD), modelShort(s.Model), titleOr(s.Title), tab)
 		}
 		fmt.Println("# history")
 		for _, h := range loadHistory(activeSessionIDs(sessions)) {
-			fmt.Printf("%4s  %-22s %-46s %s\n",
-				fmtAge(time.Since(h.ModAt).Milliseconds()), filepath.Base(h.CWD), titleOr(h.Title), h.SessionID)
+			fmt.Printf("%4s  %-22s %-10s %-46s %s\n",
+				fmtAge(time.Since(h.ModAt).Milliseconds()), filepath.Base(h.CWD), modelShort(h.Model), titleOr(h.Title), h.SessionID)
 		}
 		return
 	}
