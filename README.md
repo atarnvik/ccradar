@@ -1,17 +1,21 @@
 # ccradar
 
 A terminal dashboard to find, switch to, and resume your **Claude Code** sessions
-across **Ghostty** tabs.
+across **Ghostty**, **iTerm2**, and **Terminal.app** tabs.
 
 If you run lots of Claude Code sessions in different tabs/projects, `ccradar` gives
 you one screen to see them all, jump straight to the right native tab, and bring
-old sessions back to life — no tmux, no Ghostty fork. It reads Claude Code's own
-local data and drives Ghostty through its AppleScript API. No daemon, no network.
+old sessions back to life — no tmux, no fork. It reads Claude Code's own local
+data and drives your terminal through its AppleScript API. No daemon, no network.
 
 ## Features
 
+- **Works with Ghostty, iTerm2, and Terminal.app** — auto-detected from
+  `$TERM_PROGRAM`. iTerm2/Terminal match sessions to tabs *exactly* by tty;
+  Ghostty matches by directory + title (and upgrades to tty on versions newer
+  than 1.3.1).
 - **Active view** — every live session, grouped by directory. `enter` focuses its
-  real Ghostty tab (even when it's an inactive split pane next to logs/git).
+  real tab (even when it's an inactive iTerm/Ghostty split pane next to logs/git).
 - **Detached section** — live sessions with no open tab (closed tab / tmux / ssh)
   are shown separately with their pid; `x` cleans up a leftover.
 - **Historical view** — past sessions reconstructed from transcripts. `enter` opens
@@ -42,12 +46,13 @@ go build -o ccradar . && ./ccradar
 
 ## Requirements
 
-- **macOS** with **[Ghostty](https://ghostty.org)** (uses its AppleScript API;
-  tested on 1.3.1).
+- **macOS** with a supported terminal: **[Ghostty](https://ghostty.org)** (tested
+  on 1.3.1), **iTerm2**, or **Terminal.app**. The terminal is auto-detected from
+  `$TERM_PROGRAM`; override with `CCRADAR_TERM=ghostty|iterm|terminal`.
 - **[Claude Code](https://claude.com/claude-code)** CLI (`claude`) for resume.
 - **Go** 1.24+ to install/build.
 - First run triggers a one-time macOS **Automation** permission prompt — allow
-  your terminal to control Ghostty. The first notification may likewise prompt to
+  your terminal to control the terminal app. The first notification may likewise prompt to
   allow notifications.
 - *(optional)* [`terminal-notifier`](https://github.com/julienXX/terminal-notifier)
   (`brew install terminal-notifier`) — if present, notifications use it for
@@ -75,13 +80,17 @@ go build -o ccradar . && ./ccradar
 | Source | Used for |
 | --- | --- |
 | `~/.claude/sessions/<pid>.json` | live registry: pid, cwd, status, heartbeat |
-| `~/.claude/projects/*/<sid>.jsonl` | session title (`ai-title`) + history |
-| `osascript` → Ghostty | enumerate terminal surfaces, focus / open tabs |
+| `~/.claude/projects/*/<sid>.jsonl` | session title (`ai-title`) + model + history |
+| `ps -o tty=` | the session process's controlling tty |
+| `osascript` → your terminal | enumerate surfaces, focus / open tabs |
 
-A session is paired to a Ghostty surface by **working directory + title** (Ghostty
-sets each surface's title to the Claude session title), then `focus` brings that
-native tab/pane to the front. Resuming uses Ghostty's `new tab` with an initial
-working directory and command.
+Each terminal has a small driver (`ghostty.go`, `iterm.go`, `terminal.go`) behind
+a common interface. A session is paired to a surface **exactly by tty** on
+iTerm2/Terminal.app (`ps` gives the pid's tty; the terminal reports each
+tab/session's tty). On Ghostty 1.3.1, which doesn't expose a tty, it falls back
+to **directory + title** — and upgrades to tty automatically on newer Ghostty.
+`focus` brings the matched tab/pane to the front; resume opens a new tab (iTerm/
+Ghostty) or window (Terminal.app) running `claude --resume`.
 
 Sessions are classified by tab reachability: **open** (focusable), **detached**
 (live but no tab), **historical** (no process). Heartbeat isn't used for liveness —
@@ -89,10 +98,10 @@ idle sessions stop heartbeating — so liveness is the live pid plus the tab mat
 
 ## Limitations
 
-- macOS + Ghostty only (it's built on Ghostty's AppleScript API).
-- Matching is by cwd + title; a brand-new session shows up once it has a title
-  (usually seconds). When Ghostty exposes terminal `tty`/`pid` (newer than 1.3.1),
-  matching can become exact — see `enumScript` in `ghostty.go`.
+- macOS only (built on each terminal's AppleScript API).
+- Terminal.app has no scriptable "new tab", so **resume opens a new window** there.
+- Ghostty 1.3.1 matches by cwd + title (a brand-new session appears once it has a
+  title, usually seconds); iTerm2/Terminal.app match instantly and exactly by tty.
 
 ## License
 

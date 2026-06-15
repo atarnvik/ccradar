@@ -13,7 +13,7 @@ func mkRows(n int) []row {
 			rs = append(rs, row{kind: rowHeader, header: fmt.Sprintf("~/dir-%d", i/5)})
 		}
 		rs = append(rs, row{kind: rowSession, session: Session{
-			Status: "idle", CWD: "/x", Title: fmt.Sprintf("sess %d", i), GhosttyID: "g",
+			Status: "idle", CWD: "/x", Title: fmt.Sprintf("sess %d", i), SurfaceID: "g",
 		}})
 	}
 	return rs
@@ -72,8 +72,8 @@ func TestFuzzyMatch(t *testing.T) {
 func TestSearchFiltersRows(t *testing.T) {
 	m := model{view: viewActive, width: 80, height: 40}
 	m.sessions = []Session{
-		{CWD: "/dev/firefly", Title: "retirement math", UpdatedAt: 1, GhosttyID: "g"},
-		{CWD: "/dev/ccradar", Title: "build dashboard", UpdatedAt: 2, GhosttyID: "g"},
+		{CWD: "/dev/firefly", Title: "retirement math", UpdatedAt: 1, SurfaceID: "g"},
+		{CWD: "/dev/ccradar", Title: "build dashboard", UpdatedAt: 2, SurfaceID: "g"},
 	}
 	m.query = "fire"
 	m.rebuild()
@@ -112,6 +112,53 @@ func TestObserveBusyToIdle(t *testing.T) {
 	m.observe(busy)
 	if cmds := m.observe(idle); len(cmds) != 0 {
 		t.Fatalf("notify off should not notify, got %d", len(cmds))
+	}
+}
+
+func TestMatchTerminal(t *testing.T) {
+	terms := []Terminal{
+		{ID: "win-A", Tty: "/dev/ttys001", Title: "logs"},
+		{ID: "win-B", Tty: "/dev/ttys002", Title: "claude"},
+		{ID: "ghost-1", Tty: "", CWD: "/proj", Title: "Build the thing"},
+	}
+	used := map[string]bool{}
+
+	// exact tty match wins regardless of title
+	if got := matchTerminal(terms, used, Session{Tty: "/dev/ttys002", CWD: "/x"}); got != "win-B" {
+		t.Fatalf("tty match: got %q want win-B", got)
+	}
+	// a claimed surface isn't reused
+	if got := matchTerminal(terms, used, Session{Tty: "/dev/ttys002"}); got != "" {
+		t.Fatalf("claimed surface reused: got %q", got)
+	}
+	// no tty → cwd+title fallback (Ghostty), only against tty-less surfaces
+	if got := matchTerminal(terms, used, Session{CWD: "/proj", Title: "Build the thing"}); got != "ghost-1" {
+		t.Fatalf("cwd+title fallback: got %q want ghost-1", got)
+	}
+	// unmatched tty and empty title → no match
+	if got := matchTerminal(terms, used, Session{Tty: "/dev/ttys099"}); got != "" {
+		t.Fatalf("unmatched: got %q", got)
+	}
+}
+
+func TestDetectDriver(t *testing.T) {
+	t.Setenv("CCRADAR_TERM", "")
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	if d := detectDriver(); d.Name() != "iterm2" {
+		t.Fatalf("iTerm.app → %s", d.Name())
+	}
+	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
+	if d := detectDriver(); d.Name() != "terminal" {
+		t.Fatalf("Apple_Terminal → %s", d.Name())
+	}
+	t.Setenv("TERM_PROGRAM", "ghostty")
+	if d := detectDriver(); d.Name() != "ghostty" {
+		t.Fatalf("ghostty → %s", d.Name())
+	}
+	t.Setenv("CCRADAR_TERM", "terminal") // override wins
+	t.Setenv("TERM_PROGRAM", "ghostty")
+	if d := detectDriver(); d.Name() != "terminal" {
+		t.Fatalf("override → %s", d.Name())
 	}
 }
 
