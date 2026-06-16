@@ -23,8 +23,9 @@ data and drives your terminal through its AppleScript API. No daemon, no network
 - **Historical view** — past sessions reconstructed from transcripts. `enter` opens
   a new tab and runs `claude --resume <id>` in the original directory; `c` copies
   the command instead.
-- **Notifications** — get a native macOS notification the moment a session goes
-  **busy → idle** (a long task finished). Toggle with `n`; the choice is remembered.
+- **Notifications** — get a native macOS notification the moment a session leaves
+  **busy** — either finishing (**idle**) or pausing for your input (**waiting**).
+  Toggle with `n`; the choice is remembered.
 - **Fuzzy search** (`/`) across directory + session title, and a **sort toggle**
   (`s`) between alphabetical and last-active.
 - Each row shows the **model** in use; live auto-refresh, status/age at a glance,

@@ -133,6 +133,38 @@ func TestObserveBusyToIdle(t *testing.T) {
 	}
 }
 
+func TestObserveBusyToWaiting(t *testing.T) {
+	m := model{notify: true}
+	busy := []Session{{SessionID: "a", Status: "busy", CWD: "/x"}}
+	waiting := []Session{{SessionID: "a", Status: "waiting", CWD: "/x"}}
+	idle := []Session{{SessionID: "a", Status: "idle", CWD: "/x"}}
+
+	m.observe(busy) // seed
+	if cmds := m.observe(waiting); len(cmds) != 1 {
+		t.Fatalf("busy→waiting should notify once, got %d", len(cmds))
+	}
+	// waiting→idle is not a busy transition → no notification
+	if cmds := m.observe(idle); len(cmds) != 0 {
+		t.Fatalf("waiting→idle should not notify, got %d", len(cmds))
+	}
+	// idle→waiting is also not from busy → no notification
+	m.observe(idle)
+	if cmds := m.observe(waiting); len(cmds) != 0 {
+		t.Fatalf("idle→waiting should not notify, got %d", len(cmds))
+	}
+}
+
+func TestNotifyMessageByStatus(t *testing.T) {
+	idle := Session{Title: "Build the thing", CWD: "/x/proj", Status: "idle"}
+	wait := Session{Title: "Build the thing", CWD: "/x/proj", Status: "waiting"}
+	if got := notifBody(idle); got != "✓ finished · proj" {
+		t.Errorf("idle body = %q", got)
+	}
+	if got := notifBody(wait); got != "⏸ needs input · proj" {
+		t.Errorf("waiting body = %q", got)
+	}
+}
+
 func TestMatchTerminal(t *testing.T) {
 	terms := []Terminal{
 		{ID: "win-A", Tty: "/dev/ttys001", Title: "logs"},

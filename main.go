@@ -111,15 +111,17 @@ func checkUpdateCmd() tea.Cmd {
 }
 
 // observe diffs the incoming sessions against the last seen statuses and returns
-// notification commands for any busy→idle transition (when notifications are on).
-// prevStatus is always refreshed so toggling notify on never misfires on history.
+// notification commands when a session leaves "busy" — either finishing (idle)
+// or pausing for your input (waiting). prevStatus is always refreshed so
+// toggling notify on never misfires on history.
 func (m *model) observe(next []Session) []tea.Cmd {
 	var cmds []tea.Cmd
 	cur := make(map[string]string, len(next))
 	for _, s := range next {
 		cur[s.SessionID] = s.Status
 		if m.notify {
-			if prev, ok := m.prevStatus[s.SessionID]; ok && prev == "busy" && s.Status == "idle" {
+			prev, ok := m.prevStatus[s.SessionID]
+			if ok && prev == "busy" && (s.Status == "idle" || s.Status == "waiting") {
 				cmds = append(cmds, notifyCmd(notifTitle(s), notifBody(s)))
 			}
 		}
@@ -138,18 +140,26 @@ func notifyCmd(title, body string) tea.Cmd {
 // notifTitle / notifBody avoid repeating the directory: when a session has an
 // AI title, that headlines the notification and the body carries the status +
 // directory; otherwise the status headlines and the directory is the body.
+// The wording reflects whether Claude finished (idle) or needs input (waiting).
 func notifTitle(s Session) string {
 	if s.Title != "" {
 		return s.Title
+	}
+	if s.Status == "waiting" {
+		return "⏸ Claude needs your input"
 	}
 	return "✓ Claude finished responding"
 }
 
 func notifBody(s Session) string {
-	if s.Title != "" {
-		return "✓ finished · " + filepath.Base(s.CWD)
+	dir := filepath.Base(s.CWD)
+	if s.Title == "" {
+		return dir
 	}
-	return filepath.Base(s.CWD)
+	if s.Status == "waiting" {
+		return "⏸ needs input · " + dir
+	}
+	return "✓ finished · " + dir
 }
 
 func dirDisplay(cwd string) string {
@@ -514,7 +524,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notify = !m.notify
 			saveConfig(config{Notify: m.notify})
 			if m.notify {
-				m.flash = "notifications on (when Claude finishes)"
+				m.flash = "notifications on (Claude finishes / needs input)"
 			} else {
 				m.flash = "notifications off"
 			}
