@@ -111,9 +111,6 @@ func loadSessions() []Session {
 	if err != nil {
 		return nil
 	}
-	terms := activeDriver().Surfaces()
-	used := map[string]bool{}
-
 	var out []Session
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
@@ -142,8 +139,22 @@ func loadSessions() []Session {
 		}
 		s.Title, s.Model = metaFor(rf.SessionID)
 		s.Tty = procTty(rf.PID)
-		s.SurfaceID = matchTerminal(terms, used, s)
 		out = append(out, s)
+	}
+
+	// Pair sessions to terminal surfaces in two passes so an untitled session
+	// can't steal a titled one's surface. Pass 1: exact (tty) or cwd+title.
+	// Pass 2: not-yet-titled sessions → a fresh Claude tab in the same dir
+	// (needed on terminals without tty, e.g. Ghostty 1.3.1).
+	terms := activeDriver().Surfaces()
+	used := map[string]bool{}
+	for i := range out {
+		out[i].SurfaceID = matchTerminal(terms, used, out[i])
+	}
+	for i := range out {
+		if out[i].SurfaceID == "" && out[i].Title == "" {
+			out[i].SurfaceID = matchUntitled(terms, used, out[i])
+		}
 	}
 
 	sort.SliceStable(out, func(i, j int) bool {

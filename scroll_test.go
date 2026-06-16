@@ -191,6 +191,32 @@ func TestMatchTerminal(t *testing.T) {
 	}
 }
 
+func TestMatchUntitled(t *testing.T) {
+	terms := []Terminal{
+		{ID: "shell", Tty: "", CWD: "/proj", Title: "zsh"},          // not claude
+		{ID: "fresh", Tty: "", CWD: "/proj", Title: "Claude Code"},  // a new claude tab
+		{ID: "other", Tty: "", CWD: "/elsewhere", Title: "Claude Code"},
+	}
+	used := map[string]bool{}
+
+	// untitled session in /proj should pair with the "Claude Code" tab there
+	if got := matchUntitled(terms, used, Session{CWD: "/proj"}); got != "fresh" {
+		t.Fatalf("untitled match: got %q want fresh", got)
+	}
+	// the shell tab is never matched
+	if used["shell"] {
+		t.Fatal("plain shell surface should not be claimed")
+	}
+	// already-claimed surface isn't reused
+	if got := matchUntitled(terms, used, Session{CWD: "/proj"}); got != "" {
+		t.Fatalf("claimed surface reused: got %q", got)
+	}
+	// no claude-looking tab in the dir → no match
+	if got := matchUntitled(terms, used, Session{CWD: "/nope"}); got != "" {
+		t.Fatalf("unexpected match: got %q", got)
+	}
+}
+
 func TestDetectDriver(t *testing.T) {
 	t.Setenv("CCRADAR_TERM", "")
 	t.Setenv("TERM_PROGRAM", "iTerm.app")

@@ -87,6 +87,28 @@ func matchTerminal(terms []Terminal, used map[string]bool, s Session) string {
 	return ""
 }
 
+// matchUntitled is a last-resort pairing for a session that has no AI title yet
+// (a brand-new chat): match it to an unclaimed, tty-less surface in the same
+// directory whose title looks like a fresh Claude tab (e.g. "Claude Code").
+// Only relevant on terminals that don't expose a tty (Ghostty 1.3.1) — elsewhere
+// the exact tty match in matchTerminal already handles untitled sessions.
+func matchUntitled(terms []Terminal, used map[string]bool, s Session) string {
+	for _, t := range terms {
+		if used[t.ID] || t.Tty != "" {
+			continue
+		}
+		if t.CWD == s.CWD && looksLikeClaude(t.Title) {
+			used[t.ID] = true
+			return t.ID
+		}
+	}
+	return ""
+}
+
+func looksLikeClaude(title string) bool {
+	return strings.Contains(strings.ToLower(title), "claude")
+}
+
 // parseSurfaces decodes the shared enum output: one surface per line, fields
 // "ID US TTY US CWD US TITLE" (US = ASCII 31). Drivers emit empty fields they
 // can't provide.
