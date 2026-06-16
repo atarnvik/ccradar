@@ -30,6 +30,9 @@ var cachedDriver TermDriver
 // activeDriver returns the driver for the terminal ccradar is talking to,
 // chosen once from $CCRADAR_TERM or $TERM_PROGRAM.
 func activeDriver() TermDriver {
+	if demoMode() {
+		return demoDriver{}
+	}
 	if cachedDriver == nil {
 		cachedDriver = detectDriver()
 	}

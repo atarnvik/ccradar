@@ -31,6 +31,9 @@ const (
 // loadHistory returns recent past sessions (most-recent transcripts first),
 // excluding any session id currently live.
 func loadHistory(activeIDs map[string]bool) []HistEntry {
+	if demoMode() {
+		return demoHistory()
+	}
 	paths, _ := filepath.Glob(filepath.Join(projectsDir(), "*", "*.jsonl"))
 	if len(paths) == 0 {
 		return nil

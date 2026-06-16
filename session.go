@@ -104,6 +104,9 @@ func procComm(pid int) string {
 // loadSessions reads the registry, keeps live Claude sessions, attaches titles,
 // matches each to a Ghostty terminal, and returns them sorted by cwd.
 func loadSessions() []Session {
+	if demoMode() {
+		return demoSessions()
+	}
 	entries, err := os.ReadDir(sessionsDir())
 	if err != nil {
 		return nil

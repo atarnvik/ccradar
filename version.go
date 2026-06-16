@@ -94,7 +94,7 @@ func latestVersion() (string, error) {
 // latestIfNewer returns the latest version when it's newer than the running
 // build, else "". It's silent (returns "") on any error, dev build, or opt-out.
 func latestIfNewer() string {
-	if os.Getenv("CCRADAR_NO_UPDATE_CHECK") != "" {
+	if demoMode() || os.Getenv("CCRADAR_NO_UPDATE_CHECK") != "" {
 		return ""
 	}
 	cur := currentVersion()
