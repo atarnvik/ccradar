@@ -8,6 +8,8 @@ you one screen to see them all, jump straight to the right native tab, and bring
 old sessions back to life — no tmux, no fork. It reads Claude Code's own local
 data and drives your terminal through its AppleScript API. No daemon, no network.
 
+![ccradar demo](docs/demo.gif)
+
 ## Features
 
 - **Works with Ghostty, iTerm2, and Terminal.app** — auto-detected from
