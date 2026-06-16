@@ -126,7 +126,7 @@ func (m *model) observe(next []Session) []tea.Cmd {
 		if m.notify {
 			prev, ok := m.prevStatus[s.SessionID]
 			if ok && prev == "busy" && (s.Status == "idle" || s.Status == "waiting") {
-				cmds = append(cmds, notifyCmd(notifTitle(s), notifBody(s)))
+				cmds = append(cmds, notifyCmd(notifTitle(s), notifBody(s), notifyExec(s.SessionID)))
 			}
 		}
 	}
@@ -134,10 +134,33 @@ func (m *model) observe(next []Session) []tea.Cmd {
 	return cmds
 }
 
-func notifyCmd(title, body string) tea.Cmd {
+func notifyCmd(title, body, execCmd string) tea.Cmd {
 	return func() tea.Msg {
-		sendNotification(title, body)
+		sendNotification(title, body, execCmd)
 		return nil
+	}
+}
+
+// notifyExec builds the shell command a notification runs when clicked: re-launch
+// this binary headless to focus the session's tab. The terminal is pinned via
+// CCRADAR_TERM because the click runs with no $TERM_PROGRAM, and the absolute
+// path is used because the click's PATH won't include ~/go/bin or brew.
+func notifyExec(sessionID string) string {
+	exe, err := os.Executable()
+	if err != nil || exe == "" || sessionID == "" {
+		return ""
+	}
+	return fmt.Sprintf("CCRADAR_TERM=%s %s focus %s",
+		shellQuote(activeDriver().Name()), shellQuote(exe), shellQuote(sessionID))
+}
+
+// focusSessionID re-resolves a session by id and focuses its terminal surface.
+func focusSessionID(id string) {
+	for _, s := range loadSessions() {
+		if s.SessionID == id && s.SurfaceID != "" {
+			_ = activeDriver().Focus(s.SurfaceID)
+			return
+		}
 	}
 }
 
@@ -1044,6 +1067,11 @@ func (m model) searchLine() string {
 // ---- entry ----
 
 func main() {
+	// Headless: focus a session's tab by id (used by notification click-through).
+	if len(os.Args) > 2 && os.Args[1] == "focus" {
+		focusSessionID(os.Args[2])
+		return
+	}
 	var mode, path string
 	for _, a := range os.Args[1:] {
 		switch a {

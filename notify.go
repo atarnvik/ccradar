@@ -15,14 +15,19 @@ end run`
 
 // sendNotification posts a native notification; failures are silently ignored
 // (e.g. notification permission not yet granted). It prefers terminal-notifier
-// (its own app identity → reliable banners) and falls back to osascript, which
-// is delivered under Script Editor's identity.
-func sendNotification(title, body string) {
+// (its own app identity → reliable banners, and a clickable -execute action) and
+// falls back to osascript, which is delivered under Script Editor's identity and
+// can't run a click action.
+func sendNotification(title, body, execCmd string) {
 	if title == "" {
 		title = "ccradar"
 	}
 	if path, err := exec.LookPath("terminal-notifier"); err == nil {
-		_ = exec.Command(path, "-title", title, "-message", body, "-sound", "Glass").Run()
+		args := []string{"-title", title, "-message", body, "-sound", "Glass"}
+		if execCmd != "" {
+			args = append(args, "-execute", execCmd) // run on click → focus the tab
+		}
+		_ = exec.Command(path, args...).Run()
 		return
 	}
 	_ = exec.Command("osascript", "-e", notifyScript, title, body).Run()

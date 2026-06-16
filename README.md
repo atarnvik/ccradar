@@ -28,7 +28,9 @@ data and drives your terminal through its AppleScript API. No daemon, no network
   can tell sessions apart at a glance. Auto-hidden on narrow terminals.
 - **Notifications** — get a native macOS notification the moment a session leaves
   **busy** — either finishing (**idle**) or pausing for your input (**waiting**).
-  Toggle with `n`; the choice is remembered.
+  **Click the notification to jump straight to that session's tab.** Toggle with
+  `n`; the choice is remembered. (Click-to-jump needs `terminal-notifier`, which
+  the Homebrew install pulls in automatically.)
 - **Fuzzy search** (`/`) across directory + session title, and a **sort toggle**
   (`s`) between alphabetical and last-active.
 - Each row shows the **model** in use; live auto-refresh, status/age at a glance,
