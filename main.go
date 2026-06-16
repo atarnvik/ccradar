@@ -462,7 +462,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v := string(msg); v != "" {
 			m.latestVer = v
 			// One-time nudge with the actual command; cleared by any keypress.
-			m.flash = "update " + v + " available — go install github.com/atarnvik/ccradar@latest"
+			m.flash = "update " + v + " available — " + upgradeHint()
 		}
 	case tea.KeyMsg:
 		if m.searching {

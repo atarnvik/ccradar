@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -37,6 +38,20 @@ func currentVersion() string {
 		return ""
 	}
 	return v
+}
+
+// upgradeHint returns the command to update, based on how ccradar was installed:
+// `brew upgrade` for a Homebrew install, otherwise `go install`.
+func upgradeHint() string {
+	if exe, err := os.Executable(); err == nil {
+		if resolved, e := filepath.EvalSymlinks(exe); e == nil {
+			exe = resolved // a cask symlinks bin/ccradar into the Caskroom
+		}
+		if strings.Contains(exe, "/Caskroom/") || strings.Contains(exe, "/Cellar/") {
+			return "brew upgrade ccradar"
+		}
+	}
+	return "go install github.com/atarnvik/ccradar@latest"
 }
 
 // displayVersion is the human-readable version for `ccradar --version`.
