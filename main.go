@@ -73,6 +73,7 @@ type model struct {
 	query      string // active fuzzy filter ("" = no filter)
 	notify     bool   // send a notification on busy→idle
 	latestVer  string // newer available version ("" = up to date / unknown)
+	histLoaded bool   // history fetched at least once (for an accurate count upfront)
 	prevStatus map[string]string // sessionID → last seen status (transition tracking)
 	sessions   []Session
 	history    []HistEntry
@@ -447,6 +448,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case loadedMsg:
 		cmds := m.observe([]Session(msg)) // detect busy→idle before swapping in
 		m.sessions = []Session(msg)
+		// Load history once now that we know the active IDs (to dedup), so the
+		// Historical tab shows an accurate count from the start, not after a visit.
+		if !m.histLoaded {
+			m.histLoaded = true
+			cmds = append(cmds, loadHistCmd(activeSessionIDs(m.sessions)))
+		}
 		if m.view == viewActive {
 			m.rebuild()
 		}
