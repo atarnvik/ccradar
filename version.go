@@ -11,9 +11,12 @@ import (
 	"time"
 )
 
-// moduleProxyLatest is Go's module proxy endpoint for the newest tagged version
-// — the same source `go install …@latest` consults. No auth, no GitHub rate limits.
-const moduleProxyLatest = "https://proxy.golang.org/github.com/atarnvik/ccradar/@latest"
+// latestReleaseURL is GitHub's "latest release" endpoint. We use this rather
+// than the Go module proxy because the proxy lags (it indexes new tags on a
+// delay), whereas this reflects a published release immediately. Unauthenticated
+// GitHub API is rate-limited to 60 req/hr per IP — ample for a once-per-launch
+// check — and the call is best-effort (failures are silent).
+var latestReleaseURL = "https://api.github.com/repos/atarnvik/ccradar/releases/latest"
 
 // version is injected at release time via -ldflags "-X main.version=...".
 // (GoReleaser builds with `go build`, so runtime build info has no tag.)
@@ -62,21 +65,30 @@ func displayVersion() string {
 	return "ccradar (dev build)"
 }
 
-// latestVersion asks the module proxy for the newest published version.
+// latestVersion asks GitHub for the newest published release tag (e.g. "v0.4.1").
 func latestVersion() (string, error) {
 	c := http.Client{Timeout: 3 * time.Second}
-	resp, err := c.Get(moduleProxyLatest)
+	req, err := http.NewRequest(http.MethodGet, latestReleaseURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "ccradar") // GitHub rejects requests without one
+	resp, err := c.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", nil // e.g. 403 rate-limited or 404 no releases yet — stay quiet
+	}
 	var r struct {
-		Version string `json:"Version"`
+		TagName string `json:"tag_name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
 		return "", err
 	}
-	return r.Version, nil
+	return r.TagName, nil
 }
 
 // latestIfNewer returns the latest version when it's newer than the running

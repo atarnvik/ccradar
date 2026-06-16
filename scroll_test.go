@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -194,6 +197,39 @@ func TestCmpSemver(t *testing.T) {
 		if got := cmpSemver(c.a, c.b); got != c.want {
 			t.Errorf("cmpSemver(%q,%q)=%d want %d", c.a, c.b, got, c.want)
 		}
+	}
+}
+
+func TestLatestVersionParsesGitHub(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("User-Agent") == "" { // GitHub requires it
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		io.WriteString(w, `{"tag_name":"v0.4.1","name":"v0.4.1","draft":false}`)
+	}))
+	defer srv.Close()
+	old := latestReleaseURL
+	latestReleaseURL = srv.URL
+	defer func() { latestReleaseURL = old }()
+
+	v, err := latestVersion()
+	if err != nil || v != "v0.4.1" {
+		t.Fatalf("latestVersion()=%q,%v want v0.4.1,nil", v, err)
+	}
+}
+
+func TestLatestVersionQuietOnRateLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden) // 403 = rate limited
+	}))
+	defer srv.Close()
+	old := latestReleaseURL
+	latestReleaseURL = srv.URL
+	defer func() { latestReleaseURL = old }()
+
+	if v, err := latestVersion(); v != "" || err != nil {
+		t.Fatalf("rate-limited should be quiet: got %q,%v", v, err)
 	}
 }
 
