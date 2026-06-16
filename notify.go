@@ -47,10 +47,11 @@ func configPath() string {
 	return filepath.Join(homeDir(), ".config", "ccradar", "config.json")
 }
 
-// loadConfig reads saved preferences, defaulting notifications and the preview
-// pane to on. Absent keys keep the defaults (Unmarshal only sets present fields).
+// loadConfig reads saved preferences: notifications default on, the preview pane
+// off (opt-in via `p`). Absent keys keep the defaults (Unmarshal only sets
+// present fields), so a saved choice is always honored.
 func loadConfig() config {
-	c := config{Notify: true, Preview: true}
+	c := config{Notify: true, Preview: false}
 	b, err := os.ReadFile(configPath())
 	if err != nil {
 		return c

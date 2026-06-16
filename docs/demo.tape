@@ -19,9 +19,13 @@ Show
 # Launch the dashboard.
 Type "ccradar"
 Enter
-Sleep 2.5s
+Sleep 2.2s
 
-# Move through the active sessions.
+# Open the preview pane.
+Type "p"
+Sleep 1.2s
+
+# Move through the active sessions (preview follows the selection).
 Down@600ms 4
 Sleep 1s
 
