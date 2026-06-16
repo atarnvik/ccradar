@@ -75,12 +75,13 @@ go build -o ccradar . && ./ccradar
 - First run triggers a one-time macOS **Automation** permission prompt — allow
   your terminal to control the terminal app. The first notification may likewise prompt to
   allow notifications.
-- *(optional)* [`terminal-notifier`](https://github.com/julienXX/terminal-notifier)
-  (`brew install terminal-notifier`) — if present, notifications use it for
-  reliable banners under ccradar's own identity. Without it, ccradar falls back to
-  `osascript`, whose notifications appear as **Script Editor**; if those only land
-  silently in Notification Center, set Script Editor to **Banners/Alerts** and
-  **Deliver Prominently** in *System Settings → Notifications*.
+- [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) for
+  reliable notification banners — **installed automatically with the Homebrew
+  cask**. If you installed via `go install`, add it with
+  `brew install terminal-notifier`. Without it, ccradar falls back to `osascript`,
+  whose notifications appear as **Script Editor**; if those only land silently in
+  Notification Center, set Script Editor to **Banners/Alerts** and **Deliver
+  Prominently** in *System Settings → Notifications*.
 
 ## Keys
 

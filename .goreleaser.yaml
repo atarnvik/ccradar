@@ -40,6 +40,10 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/atarnvik/ccradar"
     description: "Dashboard to find, focus, and resume Claude Code sessions across terminals"
+    # Pull in terminal-notifier so notifications work out of the box (ccradar
+    # falls back to osascript if it's ever missing).
+    dependencies:
+      - formula: terminal-notifier
     commit_author:
       name: github-actions[bot]
       email: 41898282+github-actions[bot]@users.noreply.github.com
