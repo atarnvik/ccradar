@@ -2,8 +2,8 @@
 Output docs/demo.gif
 
 Set Shell "zsh"
-Set FontSize 16
-Set Width 1000
+Set FontSize 15
+Set Width 1180
 Set Height 640
 Set Padding 24
 Set Theme "Catppuccin Mocha"

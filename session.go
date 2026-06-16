@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -22,11 +21,14 @@ type Session struct {
 	SessionID string
 	CWD       string
 	Status    string
-	UpdatedAt int64 // ms epoch
-	Title     string
-	Model     string // model of the last non-sidechain assistant turn
-	Tty       string // controlling tty of the process (for exact surface matching)
-	SurfaceID string // matched terminal surface id; "" if no tab found
+	UpdatedAt  int64 // ms epoch
+	Title      string
+	Model      string // model of the last non-sidechain assistant turn
+	Branch     string // git branch from the transcript
+	LastPrompt string // most recent user prompt (for the preview pane)
+	LastReply  string // most recent assistant text (for the preview pane)
+	Tty        string // controlling tty of the process (for exact surface matching)
+	SurfaceID  string // matched terminal surface id; "" if no tab found
 }
 
 func homeDir() string { h, _ := os.UserHomeDir(); return h }
@@ -137,7 +139,9 @@ func loadSessions() []Session {
 			Status:    rf.Status,
 			UpdatedAt: rf.UpdatedAt,
 		}
-		s.Title, s.Model = metaFor(rf.SessionID)
+		tm := metaFor(rf.SessionID)
+		s.Title, s.Model, s.Branch = tm.title, tm.model, tm.branch
+		s.LastPrompt, s.LastReply = tm.prompt, tm.reply
 		s.Tty = procTty(rf.PID)
 		out = append(out, s)
 	}
@@ -166,34 +170,17 @@ func loadSessions() []Session {
 	return out
 }
 
-// metaFor returns the latest ai-title and the model of the last non-sidechain
-// assistant turn for a session, in a single pass over its transcript.
-func metaFor(sid string) (title, model string) {
+// metaFor finds a session's transcript and scans it (title, model, branch, last
+// prompt/reply) in a single pass.
+func metaFor(sid string) transcriptMeta {
 	if sid == "" {
-		return "", ""
+		return transcriptMeta{}
 	}
 	matches, _ := filepath.Glob(filepath.Join(projectsDir(), "*", sid+".jsonl"))
 	if len(matches) == 0 {
-		return "", ""
+		return transcriptMeta{}
 	}
-	f, err := os.Open(matches[0])
-	if err != nil {
-		return "", ""
-	}
-	defer f.Close()
-
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1024*1024), 32*1024*1024) // allow long transcript lines
-	for sc.Scan() {
-		line := sc.Bytes()
-		if t, ok := scanTitle(line); ok {
-			title = t // keep last
-		}
-		if mdl, ok := scanModel(line); ok {
-			model = mdl // keep last main-thread model
-		}
-	}
-	return title, model
+	return scanTranscript(matches[0])
 }
 
 // scanTitle extracts an ai-title from a transcript line, if present.

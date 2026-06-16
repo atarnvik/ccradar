@@ -23,6 +23,9 @@ data and drives your terminal through its AppleScript API. No daemon, no network
 - **Historical view** — past sessions reconstructed from transcripts. `enter` opens
   a new tab and runs `claude --resume <id>` in the original directory; `c` copies
   the command instead.
+- **Preview pane** — a right rail (toggle `p`) showing the selected session's
+  directory, git branch, model/status, and its last prompt + last reply, so you
+  can tell sessions apart at a glance. Auto-hidden on narrow terminals.
 - **Notifications** — get a native macOS notification the moment a session leaves
   **busy** — either finishing (**idle**) or pausing for your input (**waiting**).
   Toggle with `n`; the choice is remembered.
@@ -92,6 +95,7 @@ go build -o ccradar . && ./ccradar
 | `enter` | Active: focus tab · Historical: resume in a new tab |
 | `/` | fuzzy search (directory + title); `enter` keep, `esc` clear |
 | `s` | toggle sort: alphabetical ↔ last-active |
+| `p` | toggle the preview pane |
 | `n` | toggle busy→idle notifications (remembered across runs) |
 | `c` | Historical: copy `cd <dir> && claude --resume <id>` to clipboard |
 | `x` | Active: kill a detached (no-tab) session (press twice to confirm) |

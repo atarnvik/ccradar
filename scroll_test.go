@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func mkRows(n int) []row {
@@ -329,6 +331,24 @@ func TestUnderFilter(t *testing.T) {
 	for _, c := range cases {
 		if got := underFilter(c.cwd); got != c.want {
 			t.Errorf("underFilter(%q)=%v want %v", c.cwd, got, c.want)
+		}
+	}
+}
+
+func TestPreviewRailFits(t *testing.T) {
+	for _, view := range []viewKind{viewActive, viewHistory} {
+		m := model{preview: true, width: 120, height: 20, view: view}
+		m.sessions = demoSessions()
+		m.history = demoHistory()
+		m.rebuild()
+		out := m.View()
+		if got := renderedLines(out); got > m.height {
+			t.Fatalf("view %d overflow: %d lines > %d", view, got, m.height)
+		}
+		for _, ln := range strings.Split(out, "\n") {
+			if w := lipgloss.Width(ln); w > m.width {
+				t.Fatalf("view %d line too wide: %d > %d", view, w, m.width)
+			}
 		}
 	}
 }

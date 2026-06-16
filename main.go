@@ -24,6 +24,9 @@ var (
 	styModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("103"))
 	stySearch   = lipgloss.NewStyle().Foreground(lipgloss.Color("227")).Bold(true)
 	styUpdate   = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
+	styPrevTtl  = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
+	styPrevLbl  = lipgloss.NewStyle().Foreground(lipgloss.Color("44")).Bold(true)
+	styPrevBody = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 	styTab      = lipgloss.NewStyle().Foreground(lipgloss.Color("44"))
 	styCursor   = lipgloss.NewStyle().Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231")).Bold(true)
 	styHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -72,6 +75,7 @@ type model struct {
 	searching  bool   // editing the search query
 	query      string // active fuzzy filter ("" = no filter)
 	notify     bool   // send a notification on busy→idle
+	preview    bool   // show the right-hand preview pane
 	latestVer  string // newer available version ("" = up to date / unknown)
 	histLoaded bool   // history fetched at least once (for an accurate count upfront)
 	prevStatus map[string]string // sessionID → last seen status (transition tracking)
@@ -522,12 +526,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flash = "sort: " + m.sortLabel()
 		case "n":
 			m.notify = !m.notify
-			saveConfig(config{Notify: m.notify})
+			saveConfig(config{Notify: m.notify, Preview: m.preview})
 			if m.notify {
 				m.flash = "notifications on (Claude finishes / needs input)"
 			} else {
 				m.flash = "notifications off"
 			}
+		case "p":
+			m.preview = !m.preview
+			saveConfig(config{Notify: m.notify, Preview: m.preview})
+			m.flash = "preview " + onOff(m.preview)
 		case "r":
 			if m.view == viewActive {
 				return m, loadActiveCmd()
@@ -782,58 +790,33 @@ func (m model) View() string {
 	if end > len(m.rows) {
 		end = len(m.rows)
 	}
+
+	// Right preview rail when enabled and the terminal is wide enough.
+	showRail := m.preview && len(m.rows) > 0 && m.width >= 100
+	cw := m.width
+	railW := 0
+	if showRail {
+		railW = 38
+		cw = m.width - railW - 3 // " │ " separator = 3 cells
+	}
+
+	lines := make([]string, 0, v)
 	for i := m.top; i < end; i++ {
-		r := m.rows[i]
-		if r.kind == rowHeader {
-			b.WriteString(styHeader.Render(r.header) + "\n")
-			continue
-		}
-		if r.kind == rowDivider {
-			// Single line so every windowed row is exactly one screen line.
-			b.WriteString(styHelp.Render("  ── "+r.header+" ──") + "\n")
-			continue
-		}
+		lines = append(lines, m.renderListLine(i, cw))
+	}
 
-		// Build plain and colored variants with identical column widths so the
-		// row lines up whether it's the highlighted (plain) or normal (colored) form.
-		var plain, colored string
-		switch r.kind {
-		case rowSession:
-			s := r.session
-			sp, sst := statusText(s.Status)
-			age := fmt.Sprintf("%4s", fmtAge(nowMs()-s.UpdatedAt))
-			titleF := truncPad(titleOr(s.Title), 40)
-			mdl := truncPad(modelShort(s.Model), 10)
-			if s.SurfaceID != "" {
-				loc := "→ tab"
-				plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
-				colored = fmt.Sprintf("%s %s  %s  %s  %s",
-					sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(loc))
-			} else {
-				loc := fmt.Sprintf("pid %d", s.PID)
-				plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
-				colored = styDim.Render(plain) // detached: muted whole row
-			}
-		case rowHist:
-			h := r.hist
-			age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
-			titleF := truncPad(titleOr(h.Title), 40)
-			mdl := truncPad(modelShort(h.Model), 10)
-			plain = fmt.Sprintf("%s  %s  %s  %s", age, titleF, mdl, "↻ resume")
-			colored = fmt.Sprintf("%s  %s  %s  %s",
-				styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render("↻ resume"))
+	if showRail {
+		blank := strings.Repeat(" ", cw)
+		for len(lines) < v { // pad so the rail reads as a full-height panel
+			lines = append(lines, blank)
 		}
-
-		if i == m.cursor {
-			// Pad/truncate to an exact width so the bar fills the row and never
-			// wraps onto a second line (which would overflow the viewport).
-			text := "▸ " + plain
-			if m.width > 2 {
-				text = truncPad(text, m.width-2)
-			}
-			b.WriteString("  " + styCursor.Render(text) + "\n")
-		} else {
-			b.WriteString("    " + colored + "\n")
+		right := m.previewLines(railW, v)
+		for i := 0; i < v; i++ {
+			b.WriteString(lines[i] + " " + styDim.Render("│") + " " + right[i] + "\n")
+		}
+	} else {
+		for _, ln := range lines {
+			b.WriteString(ln + "\n")
 		}
 	}
 
@@ -855,7 +838,7 @@ func (m model) View() string {
 		} else {
 			help += "resume (new tab) · c copy cmd"
 		}
-		help += " · / search · s sort:" + m.sortLabel() + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
+		help += " · / search · s sort:" + m.sortLabel() + " · p preview:" + onOff(m.preview) + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
 	b.WriteString(styHelp.Render(trunc(help, m.width)))
 	// No trailing newline: a final "\n" would make Bubble Tea count an extra
@@ -873,6 +856,173 @@ func trunc(s string, n int) string {
 		return string(r[:n])
 	}
 	return s
+}
+
+// padVis pads a styled string (whose visible width is vis) with spaces to cw.
+func padVis(s string, vis, cw int) string {
+	if vis < cw {
+		return s + strings.Repeat(" ", cw-vis)
+	}
+	return s
+}
+
+// renderListLine renders row i as a styled line of exactly cw visible cells.
+func (m model) renderListLine(i, cw int) string {
+	r := m.rows[i]
+	switch r.kind {
+	case rowHeader:
+		return styHeader.Render(truncPad(r.header, cw))
+	case rowDivider:
+		return styHelp.Render(truncPad("  ── "+r.header+" ──", cw))
+	}
+	plain, colored := m.rowColumns(r, cw)
+	if i == m.cursor {
+		return "  " + styCursor.Render(truncPad("▸ "+plain, cw-2))
+	}
+	return padVis("    "+colored, 4+len([]rune(plain)), cw)
+}
+
+// rowColumns builds the aligned columns for a session/history row. The title
+// column flexes so the plain text is exactly cw-4 cells wide (the 4 is the row's
+// left indent), keeping the highlighted and normal forms identical.
+func (m model) rowColumns(r row, cw int) (plain, colored string) {
+	switch r.kind {
+	case rowSession:
+		s := r.session
+		sp, sst := statusText(s.Status)
+		age := fmt.Sprintf("%4s", fmtAge(nowMs()-s.UpdatedAt))
+		tw := cw - 40
+		if tw < 8 {
+			tw = 8
+		}
+		titleF := truncPad(titleOr(s.Title), tw)
+		mdl := truncPad(modelShort(s.Model), 10)
+		if s.SurfaceID != "" {
+			loc := truncPad("→ tab", 8)
+			plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
+			colored = fmt.Sprintf("%s %s  %s  %s  %s",
+				sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(loc))
+		} else {
+			loc := truncPad(fmt.Sprintf("pid %d", s.PID), 8)
+			plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
+			colored = styDim.Render(plain) // detached: muted whole row
+		}
+	case rowHist:
+		h := r.hist
+		age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
+		tw := cw - 32
+		if tw < 8 {
+			tw = 8
+		}
+		titleF := truncPad(titleOr(h.Title), tw)
+		mdl := truncPad(modelShort(h.Model), 10)
+		resume := truncPad("↻ resume", 8)
+		plain = fmt.Sprintf("%s  %s  %s  %s", age, titleF, mdl, resume)
+		colored = fmt.Sprintf("%s  %s  %s  %s",
+			styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(resume))
+	}
+	return plain, colored
+}
+
+// previewLines renders the selected session's detail panel: exactly h lines,
+// each w cells wide (title, dir/branch/model/status/age, last prompt, last reply).
+func (m model) previewLines(w, h int) []string {
+	type seg struct {
+		text  string
+		style lipgloss.Style
+	}
+	var segs []seg
+	push := func(text string, style lipgloss.Style) {
+		for _, ln := range wrapText(text, w) {
+			segs = append(segs, seg{ln, style})
+		}
+	}
+
+	if m.cursor < len(m.rows) {
+		var title, dir, branch, model, status, age, prompt, reply string
+		switch r := m.rows[m.cursor]; r.kind {
+		case rowSession:
+			s := r.session
+			title, dir, branch = titleOr(s.Title), dirDisplay(s.CWD), s.Branch
+			model, status, age = modelShort(s.Model), s.Status, fmtAge(nowMs()-s.UpdatedAt)
+			prompt, reply = s.LastPrompt, s.LastReply
+		case rowHist:
+			hh := r.hist
+			title, dir, branch = titleOr(hh.Title), dirDisplay(hh.CWD), hh.Branch
+			model, age = modelShort(hh.Model), fmtAge(time.Since(hh.ModAt).Milliseconds())
+			prompt, reply = hh.LastPrompt, hh.LastReply
+		}
+		push(title, styPrevTtl)
+		meta := dir
+		if branch != "" {
+			meta += " · " + branch
+		}
+		push(meta, styDim)
+		line2 := model
+		if status != "" {
+			line2 += " · " + status
+		}
+		if age != "" {
+			line2 += " · " + age
+		}
+		push(line2, styDim)
+		if prompt != "" {
+			segs = append(segs, seg{"", styDim})
+			push("▸ You", styPrevLbl)
+			push(prompt, styPrevBody)
+		}
+		if reply != "" {
+			segs = append(segs, seg{"", styDim})
+			push("▸ Claude", styPrevLbl)
+			push(reply, styPrevBody)
+		}
+	}
+
+	out := make([]string, h)
+	for i := 0; i < h; i++ {
+		if i < len(segs) {
+			out[i] = padVis(segs[i].style.Render(segs[i].text), len([]rune(segs[i].text)), w)
+		} else {
+			out[i] = strings.Repeat(" ", w)
+		}
+	}
+	return out
+}
+
+// wrapText greedily wraps s to width w (hard-breaking over-long words).
+func wrapText(s string, w int) []string {
+	if w < 1 {
+		w = 1
+	}
+	var out []string
+	line := ""
+	flush := func() {
+		out = append(out, line)
+		line = ""
+	}
+	for _, word := range strings.Fields(s) {
+		for len([]rune(word)) > w { // break a word longer than the column
+			if line != "" {
+				flush()
+			}
+			r := []rune(word)
+			out = append(out, string(r[:w]))
+			word = string(r[w:])
+		}
+		switch {
+		case line == "":
+			line = word
+		case len([]rune(line))+1+len([]rune(word)) <= w:
+			line += " " + word
+		default:
+			flush()
+			line = word
+		}
+	}
+	if line != "" {
+		flush()
+	}
+	return out
 }
 
 // searchLine renders the filter bar: the query (with a cursor while editing)
@@ -917,7 +1067,7 @@ func main() {
 		return
 	}
 	cfg := loadConfig()
-	if _, err := tea.NewProgram(model{notify: cfg.Notify}, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview}, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -956,7 +1106,7 @@ func debugMode(which string) {
 		return
 	}
 	// render: one frame of each view
-	m := model{sessions: sessions, history: loadHistory(activeSessionIDs(sessions)), width: 100, height: 40}
+	m := model{sessions: sessions, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
 	m.rebuild()
 	fmt.Println("=== ACTIVE ===")
 	fmt.Print(m.View())

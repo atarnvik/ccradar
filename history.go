@@ -7,17 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
 // HistEntry is a past (non-live) Claude Code session, reconstructed from its
 // transcript file.
 type HistEntry struct {
-	SessionID string
-	CWD       string
-	Title     string
-	Model     string    // model of the last non-sidechain assistant turn
-	ModAt     time.Time // transcript file mtime ≈ last activity
+	SessionID  string
+	CWD        string
+	Title      string
+	Model      string    // model of the last non-sidechain assistant turn
+	Branch     string    // git branch from the transcript
+	LastPrompt string    // most recent user prompt (for the preview pane)
+	LastReply  string    // most recent assistant text (for the preview pane)
+	ModAt      time.Time // transcript file mtime ≈ last activity
 }
 
 // histScanLimit caps how many recent transcripts we parse, so a big history
@@ -72,11 +76,14 @@ func loadHistory(activeIDs map[string]bool) []HistEntry {
 			continue
 		}
 		reads++
-		cwd, title, model := readTranscript(e.path)
-		if cwd == "" || !underFilter(cwd) {
+		tm := scanTranscript(e.path)
+		if tm.cwd == "" || !underFilter(tm.cwd) {
 			continue // need a directory, and it must be within the filter
 		}
-		out = append(out, HistEntry{SessionID: sid, CWD: cwd, Title: title, Model: model, ModAt: e.mod})
+		out = append(out, HistEntry{
+			SessionID: sid, CWD: tm.cwd, Title: tm.title, Model: tm.model,
+			Branch: tm.branch, LastPrompt: tm.prompt, LastReply: tm.reply, ModAt: e.mod,
+		})
 	}
 
 	// group-friendly: by directory, then most recent first within a directory
@@ -89,12 +96,19 @@ func loadHistory(activeIDs map[string]bool) []HistEntry {
 	return out
 }
 
-// readTranscript does a single pass to grab the first cwd, the last ai-title,
-// and the model of the last non-sidechain assistant turn.
-func readTranscript(path string) (cwd, title, model string) {
+// transcriptMeta is everything we extract from one transcript in a single pass.
+type transcriptMeta struct {
+	cwd, title, model, branch, prompt, reply string
+}
+
+// scanTranscript reads a transcript once and pulls the first cwd, the last
+// ai-title, the model and git branch, and the latest user prompt + assistant
+// reply (for the preview pane).
+func scanTranscript(path string) transcriptMeta {
+	var tm transcriptMeta
 	f, err := os.Open(path)
 	if err != nil {
-		return "", "", ""
+		return tm
 	}
 	defer f.Close()
 
@@ -102,22 +116,70 @@ func readTranscript(path string) (cwd, title, model string) {
 	sc.Buffer(make([]byte, 1024*1024), 32*1024*1024)
 	for sc.Scan() {
 		line := sc.Bytes()
-		if cwd == "" && bytes.Contains(line, []byte(`"cwd"`)) {
+		if tm.cwd == "" && bytes.Contains(line, []byte(`"cwd"`)) {
 			var r struct {
 				Cwd string `json:"cwd"`
 			}
 			if json.Unmarshal(line, &r) == nil && r.Cwd != "" {
-				cwd = r.Cwd
+				tm.cwd = r.Cwd
+			}
+		}
+		if bytes.Contains(line, []byte(`"gitBranch"`)) {
+			var r struct {
+				Branch string `json:"gitBranch"`
+			}
+			if json.Unmarshal(line, &r) == nil && r.Branch != "" {
+				tm.branch = r.Branch
 			}
 		}
 		if t, ok := scanTitle(line); ok {
-			title = t
+			tm.title = t
 		}
 		if mdl, ok := scanModel(line); ok {
-			model = mdl
+			tm.model = mdl
+		}
+		if bytes.Contains(line, []byte(`"type":"last-prompt"`)) {
+			var r struct {
+				LastPrompt string `json:"lastPrompt"`
+			}
+			if json.Unmarshal(line, &r) == nil && r.LastPrompt != "" {
+				tm.prompt = r.LastPrompt
+			}
+		}
+		if bytes.Contains(line, []byte(`"type":"assistant"`)) {
+			if txt := assistantText(line); txt != "" {
+				tm.reply = txt
+			}
 		}
 	}
-	return cwd, title, model
+	return tm
+}
+
+// assistantText returns the concatenated text blocks of a non-sidechain
+// assistant message ("" if it's a sidechain or has no text, e.g. tool-only).
+func assistantText(line []byte) string {
+	var r struct {
+		IsSidechain bool `json:"isSidechain"`
+		Message     struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &r) != nil || r.IsSidechain {
+		return ""
+	}
+	var b strings.Builder
+	for _, c := range r.Message.Content {
+		if c.Type == "text" && c.Text != "" {
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(c.Text)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // activeSessionIDs returns the set of session ids backed by a live process.

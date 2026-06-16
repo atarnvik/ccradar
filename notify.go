@@ -31,7 +31,8 @@ func sendNotification(title, body string) {
 // ---- persisted preferences ----
 
 type config struct {
-	Notify bool `json:"notify"`
+	Notify  bool `json:"notify"`
+	Preview bool `json:"preview"`
 }
 
 func configPath() string {
@@ -41,9 +42,10 @@ func configPath() string {
 	return filepath.Join(homeDir(), ".config", "ccradar", "config.json")
 }
 
-// loadConfig reads saved preferences, defaulting notifications to on.
+// loadConfig reads saved preferences, defaulting notifications and the preview
+// pane to on. Absent keys keep the defaults (Unmarshal only sets present fields).
 func loadConfig() config {
-	c := config{Notify: true}
+	c := config{Notify: true, Preview: true}
 	b, err := os.ReadFile(configPath())
 	if err != nil {
 		return c
