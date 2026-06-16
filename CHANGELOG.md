@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/atarnvik/ccradar/compare/v0.5.0...v0.6.0) (2026-06-16)
+
+
+### Features
+
+* add a preview pane for the selected session ([11ef768](https://github.com/atarnvik/ccradar/commit/11ef7684fff02e618a9cc1ca8d96dd4c45e5b9ba))
+* click a notification to jump to its session tab ([1e2d5e7](https://github.com/atarnvik/ccradar/commit/1e2d5e7ff459910df93fa27f14ff92ce024a1ae9))
+
+
+### Bug Fixes
+
+* default the preview pane to off (opt-in via p) ([206ce5e](https://github.com/atarnvik/ccradar/commit/206ce5efa7308e26aedc134061bcf902758276b7))
+
 ## [0.5.0](https://github.com/atarnvik/ccradar/compare/v0.4.1...v0.5.0) (2026-06-16)
 
 
