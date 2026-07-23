@@ -308,6 +308,51 @@ func TestLatestIfNewerOptOutAndDevBuild(t *testing.T) {
 	}
 }
 
+func TestParseDockerSource(t *testing.T) {
+	a := parseDockerSource("yogi-dev")
+	if a.kind != srcDocker || a.selector != "yogi-dev" || a.label != "yogi-dev" || a.claudeDir != "/home/vscode/.claude" {
+		t.Fatalf("default: %+v", a)
+	}
+	b := parseDockerSource("svc=/root/.claude")
+	if b.selector != "svc" || b.claudeDir != "/root/.claude" {
+		t.Fatalf("override: %+v", b)
+	}
+}
+
+func TestParseDockerSessions(t *testing.T) {
+	// US-delimited rows as the in-container script emits them.
+	us := "\x1f"
+	rows := strings.Join([]string{
+		strings.Join([]string{"42", "sid-a", "/workspaces/app", "busy", "1000", "1", "Fix the bug", "claude-opus-4-8", "main", "fix the flaky test"}, us),
+		strings.Join([]string{"7", "sid-dead", "/workspaces/app", "idle", "900", "0", "old", "claude-sonnet-4-6", "main", "x"}, us), // not alive → skipped
+	}, "\n")
+
+	got := parseDockerSessions(rows, "yogi-dev", "container123")
+	if len(got) != 1 {
+		t.Fatalf("want 1 live session, got %d", len(got))
+	}
+	s := got[0]
+	if s.PID != 42 || s.SessionID != "sid-a" || s.CWD != "/workspaces/app" || s.Status != "busy" ||
+		s.UpdatedAt != 1000 || s.Title != "Fix the bug" || s.Model != "claude-opus-4-8" ||
+		s.Branch != "main" || s.LastPrompt != "fix the flaky test" ||
+		s.Source != "yogi-dev" || s.Container != "container123" || !s.remote() {
+		t.Fatalf("parsed wrong: %+v", s)
+	}
+}
+
+func TestMatchByTitle(t *testing.T) {
+	terms := []Terminal{{ID: "host-tab", Tty: "/dev/ttys004", CWD: "/Users/me/x", Title: "✳ Fix the bug"}}
+	used := map[string]bool{}
+	// container session: tty/cwd differ, but the title reached the host tab
+	s := Session{Title: "Fix the bug", CWD: "/workspaces/app", Tty: "/dev/pts/0", Container: "c1"}
+	if got := matchByTitle(terms, used, s); got != "host-tab" {
+		t.Fatalf("title match: got %q want host-tab", got)
+	}
+	if got := matchByTitle(terms, used, s); got != "" {
+		t.Fatalf("claimed surface reused: %q", got)
+	}
+}
+
 func TestUnderFilter(t *testing.T) {
 	defer func() { dirFilter = "" }()
 

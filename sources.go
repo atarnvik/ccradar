@@ -1,0 +1,167 @@
+package main
+
+import (
+	"os/exec"
+	"strconv"
+	"strings"
+)
+
+// A Source is a place ccradar reads Claude sessions from: the local machine, or
+// a Docker container (a devcontainer). Local is always present; docker sources
+// are added with --docker at startup.
+type srcKind int
+
+const (
+	srcLocal srcKind = iota
+	srcDocker
+)
+
+type Source struct {
+	kind      srcKind
+	label     string // shown in the UI ("" for local)
+	selector  string // docker: container name/id or compose service
+	claudeDir string // docker: path to ~/.claude inside the container
+}
+
+// extraSources holds docker sources parsed from the command line.
+var extraSources []Source
+
+// allSources is local first, then any --docker sources.
+func allSources() []Source {
+	return append([]Source{{kind: srcLocal}}, extraSources...)
+}
+
+// parseDockerSource parses "--docker <sel>" or "--docker <sel>=/path".
+func parseDockerSource(arg string) Source {
+	sel, dir := arg, "/home/vscode/.claude"
+	if i := strings.IndexByte(arg, '='); i >= 0 {
+		sel, dir = arg[:i], arg[i+1:]
+	}
+	return Source{kind: srcDocker, label: sel, selector: sel, claudeDir: dir}
+}
+
+// resolveContainer maps a selector to a concrete running container id, trying a
+// container name, then a compose service label, then the selector as an id.
+func resolveContainer(selector string) string {
+	try := func(args ...string) string {
+		out, err := exec.Command("docker", args...).Output()
+		if err != nil {
+			return ""
+		}
+		if id := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0]); id != "" {
+			return id
+		}
+		return ""
+	}
+	if id := try("ps", "-q", "-f", "name="+selector); id != "" {
+		return id
+	}
+	if id := try("ps", "-q", "-f", "label=com.docker.compose.service="+selector); id != "" {
+		return id
+	}
+	// Assume it's already a valid id/name; docker exec will fail gracefully if not.
+	return selector
+}
+
+// resumeInvocation returns (cwd, command) to open in a new tab to resume a
+// session. Local runs claude directly in cwd; a container session runs it via
+// docker exec (in a host tab, so it stays focusable), with -w for the in-
+// container dir and a login shell so claude is on PATH.
+func resumeInvocation(cwd, container, sid string) (string, string) {
+	if container != "" {
+		return homeDir(), "docker exec -it -w " + shellQuote(cwd) + " " + shellQuote(container) +
+			" bash -lc " + shellQuote("claude --resume "+sid)
+	}
+	return cwd, resumeCommand(sid)
+}
+
+// resumeClipboard is the paste-able form of the resume command.
+func resumeClipboard(cwd, container, sid string) string {
+	if container != "" {
+		_, cmd := resumeInvocation(cwd, container, sid)
+		return cmd
+	}
+	return "cd " + shellQuote(cwd) + " && " + resumeCommand(sid)
+}
+
+// dockerKill sends SIGTERM to a session's process inside its container.
+func dockerKill(container string, pid int) error {
+	if container == "" || pid <= 0 {
+		return nil
+	}
+	return exec.Command("docker", "exec", container, "kill", "-TERM", strconv.Itoa(pid)).Run()
+}
+
+// dockerScript extracts, per session, a US-delimited row: pid, sessionId, cwd,
+// status, updatedAt, alive, title, model, branch, lastPrompt. It uses only
+// POSIX sh + grep/sed/tail and reads only the append-only JSON/JSONL (never the
+// sqlite db), so it can't disturb Claude's storage.
+func dockerScript(claudeDir string) string {
+	return `CL=` + shellQuote(claudeDir) + `
+US=$(printf '\037')
+for f in "$CL"/sessions/*.json; do
+  [ -e "$f" ] || continue
+  pid=$(sed -n 's/.*"pid":\([0-9][0-9]*\).*/\1/p' "$f" | head -1)
+  sid=$(sed -n 's/.*"sessionId":"\([^"]*\)".*/\1/p' "$f" | head -1)
+  cwd=$(sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p' "$f" | head -1)
+  st=$(sed -n 's/.*"status":"\([^"]*\)".*/\1/p' "$f" | head -1)
+  up=$(sed -n 's/.*"updatedAt":\([0-9][0-9]*\).*/\1/p' "$f" | head -1)
+  al=0; { [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; } && al=1
+  t=$(ls "$CL"/projects/*/"$sid".jsonl 2>/dev/null | head -1)
+  ti=; mo=; br=; pr=
+  if [ -n "$t" ]; then
+    ti=$(grep '"type":"ai-title"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"aiTitle":"\([^"]*\)".*/\1/p')
+    mo=$(grep '"type":"assistant"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
+    br=$(grep -o '"gitBranch":"[^"]*"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"gitBranch":"\([^"]*\)".*/\1/p')
+    pr=$(grep '"type":"last-prompt"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"lastPrompt":"\([^"]*\)".*/\1/p' | cut -c1-200)
+  fi
+  printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' \
+    "$pid" "$US" "$sid" "$US" "$cwd" "$US" "$st" "$US" "$up" "$US" "$al" "$US" "$ti" "$US" "$mo" "$US" "$br" "$US" "$pr"
+done`
+}
+
+// dockerSessions reads live sessions from a container via one `docker exec`.
+func dockerSessions(src Source) []Session {
+	cid := resolveContainer(src.selector)
+	if cid == "" {
+		return nil
+	}
+	out, err := exec.Command("docker", "exec", cid, "sh", "-c", dockerScript(src.claudeDir)).Output()
+	if err != nil {
+		return nil // docker missing / container down / exec failed → contribute nothing
+	}
+	return parseDockerSessions(string(out), src.label, cid)
+}
+
+// parseDockerSessions turns the script's US-delimited rows into live Sessions.
+func parseDockerSessions(out, label, container string) []Session {
+	var sessions []Session
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		p := strings.Split(line, "\x1f")
+		if len(p) < 10 {
+			continue
+		}
+		if p[5] != "1" { // alive flag
+			continue
+		}
+		pid, _ := strconv.Atoi(p[0])
+		up, _ := strconv.ParseInt(p[4], 10, 64)
+		sessions = append(sessions, Session{
+			PID:        pid,
+			SessionID:  p[1],
+			CWD:        p[2],
+			Status:     p[3],
+			UpdatedAt:  up,
+			Title:      p[6],
+			Model:      p[7],
+			Branch:     p[8],
+			LastPrompt: p[9],
+			Source:     label,
+			Container:  container,
+		})
+	}
+	return sessions
+}

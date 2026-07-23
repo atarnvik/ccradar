@@ -200,10 +200,14 @@ func dirDisplay(cwd string) string {
 func (m *model) rebuild() {
 	var rows []row
 	prev := ""
-	header := func(cwd string) {
+	header := func(cwd, src string) {
 		if cwd != prev {
 			prev = cwd
-			rows = append(rows, row{kind: rowHeader, header: dirDisplay(cwd)})
+			h := dirDisplay(cwd)
+			if src != "" { // tag container sources so local vs remote is obvious
+				h = "⬢ " + src + "  " + h
+			}
+			rows = append(rows, row{kind: rowHeader, header: h})
 		}
 	}
 	if m.view == viewActive {
@@ -221,7 +225,7 @@ func (m *model) rebuild() {
 			}
 		}
 		for _, s := range open {
-			header(s.CWD)
+			header(s.CWD, s.Source)
 			rows = append(rows, row{kind: rowSession, session: s})
 		}
 		if len(detached) > 0 {
@@ -236,7 +240,7 @@ func (m *model) rebuild() {
 			if !fuzzyMatch(m.query, histHay(h)) {
 				continue
 			}
-			header(h.CWD)
+			header(h.CWD, "")
 			rows = append(rows, row{kind: rowHist, hist: h})
 		}
 	}
@@ -649,15 +653,27 @@ func (m *model) activate() {
 	r := m.rows[m.cursor]
 	switch r.kind {
 	case rowSession:
-		if r.session.SurfaceID != "" {
-			_ = activeDriver().Focus(r.session.SurfaceID)
-			m.flash = "→ focused " + filepath.Base(r.session.CWD)
-		} else {
-			m.flash = fmt.Sprintf("detached (pid %d) — no tab to focus; press x to kill", r.session.PID)
+		s := r.session
+		switch {
+		case s.SurfaceID != "":
+			_ = activeDriver().Focus(s.SurfaceID)
+			m.flash = "→ focused " + filepath.Base(s.CWD)
+		case s.remote():
+			// live container session with no matched host tab → open one exec'd in
+			cwd, cmd := resumeInvocation(s.CWD, s.Container, s.SessionID)
+			if err := activeDriver().OpenResume(cwd, cmd); err != nil {
+				_ = copyToClipboard(resumeClipboard(s.CWD, s.Container, s.SessionID))
+				m.flash = "couldn't open tab — command copied"
+			} else {
+				m.flash = "↻ opening " + filepath.Base(s.CWD) + " (" + s.Source + ")"
+			}
+		default:
+			m.flash = fmt.Sprintf("detached (pid %d) — no tab to focus; press x to kill", s.PID)
 		}
 	case rowHist:
-		if err := activeDriver().OpenResume(r.hist.CWD, r.hist.SessionID); err != nil {
-			_ = copyResumeCommand(r.hist.CWD, r.hist.SessionID)
+		cwd, cmd := resumeInvocation(r.hist.CWD, "", r.hist.SessionID)
+		if err := activeDriver().OpenResume(cwd, cmd); err != nil {
+			_ = copyToClipboard(resumeClipboard(r.hist.CWD, "", r.hist.SessionID))
 			m.flash = "couldn't open tab — resume command copied to clipboard"
 		} else {
 			m.flash = "↻ resuming " + filepath.Base(r.hist.CWD) + " in a new tab"
@@ -676,7 +692,13 @@ func (m *model) killSelected() {
 	}
 	pid := r.session.PID
 	if m.pendingKill == pid {
-		if err := killProcess(pid); err != nil {
+		var err error
+		if r.session.remote() {
+			err = dockerKill(r.session.Container, pid) // kill inside the container
+		} else {
+			err = killProcess(pid)
+		}
+		if err != nil {
 			m.flash = fmt.Sprintf("kill pid %d failed: %v", pid, err)
 		} else {
 			m.flash = fmt.Sprintf("sent SIGTERM to pid %d", pid)
@@ -693,9 +715,16 @@ func (m *model) copyResume() {
 		return
 	}
 	r := m.rows[m.cursor]
-	if r.kind == rowHist {
-		if copyResumeCommand(r.hist.CWD, r.hist.SessionID) == nil {
-			m.flash = "copied: cd … && " + resumeCommand(r.hist.SessionID)
+	switch r.kind {
+	case rowHist:
+		if copyToClipboard(resumeClipboard(r.hist.CWD, "", r.hist.SessionID)) == nil {
+			m.flash = "copied resume command"
+		}
+	case rowSession:
+		if r.session.remote() {
+			if copyToClipboard(resumeClipboard(r.session.CWD, r.session.Container, r.session.SessionID)) == nil {
+				m.flash = "copied resume command"
+			}
 		}
 	}
 }
@@ -962,11 +991,11 @@ func (m model) previewLines(w, h int) []string {
 	}
 
 	if m.cursor < len(m.rows) {
-		var title, dir, branch, model, status, age, prompt, reply string
+		var title, source, dir, branch, model, status, age, prompt, reply string
 		switch r := m.rows[m.cursor]; r.kind {
 		case rowSession:
 			s := r.session
-			title, dir, branch = titleOr(s.Title), dirDisplay(s.CWD), s.Branch
+			title, source, dir, branch = titleOr(s.Title), s.Source, dirDisplay(s.CWD), s.Branch
 			model, status, age = modelShort(s.Model), s.Status, fmtAge(nowMs()-s.UpdatedAt)
 			prompt, reply = s.LastPrompt, s.LastReply
 		case rowHist:
@@ -976,6 +1005,9 @@ func (m model) previewLines(w, h int) []string {
 			prompt, reply = hh.LastPrompt, hh.LastReply
 		}
 		push(title, styPrevTtl)
+		if source != "" {
+			push("⬢ "+source, styPrevLbl)
+		}
 		meta := dir
 		if branch != "" {
 			meta += " · " + branch
@@ -1073,8 +1105,9 @@ func main() {
 		return
 	}
 	var mode, path string
-	for _, a := range os.Args[1:] {
-		switch a {
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; a {
 		case "dump", "render":
 			mode = a
 		case "-h", "--help", "help":
@@ -1083,8 +1116,15 @@ func main() {
 		case "-v", "--version", "version":
 			fmt.Println(displayVersion())
 			return
+		case "--docker":
+			if i+1 < len(args) {
+				extraSources = append(extraSources, parseDockerSource(args[i+1]))
+				i++
+			}
 		default:
-			path = a // a directory to scope to
+			if !strings.HasPrefix(a, "-") {
+				path = a // a directory to scope to
+			}
 		}
 	}
 	if path != "" {
@@ -1105,8 +1145,10 @@ func printUsage() {
 	fmt.Println(`ccradar — Claude Code session dashboard for Ghostty
 
 Usage:
-  ccradar [dir]      scope to a directory and its subdirectories (e.g. ccradar ~/src/app)
-  ccradar            show all sessions
+  ccradar [dir]         scope to a directory and its subdirectories (e.g. ccradar ~/src/app)
+  ccradar --docker <c>  also read sessions from a container (name or compose service;
+                        repeatable; --docker <c>=/path to override ~/.claude)
+  ccradar               show all local sessions
 
 Terminal: auto-detected from $TERM_PROGRAM (Ghostty, iTerm2, Terminal.app).
 Override with CCRADAR_TERM=ghostty|iterm|terminal.

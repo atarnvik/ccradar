@@ -76,6 +76,6 @@ const itermResumeScript = `on run argv
   end tell
 end run`
 
-func (itermDriver) OpenResume(cwd, sid string) error {
-	return osaRun(itermResumeScript, cwd, resumeCommand(sid))
+func (itermDriver) OpenResume(cwd, command string) error {
+	return osaRun(itermResumeScript, cwd, command)
 }

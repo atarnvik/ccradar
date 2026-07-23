@@ -68,6 +68,6 @@ const terminalResumeScript = `on run argv
   end tell
 end run`
 
-func (terminalDriver) OpenResume(cwd, sid string) error {
-	return osaRun(terminalResumeScript, cwd, resumeCommand(sid))
+func (terminalDriver) OpenResume(cwd, command string) error {
+	return osaRun(terminalResumeScript, cwd, command)
 }

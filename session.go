@@ -29,7 +29,11 @@ type Session struct {
 	LastReply  string // most recent assistant text (for the preview pane)
 	Tty        string // controlling tty of the process (for exact surface matching)
 	SurfaceID  string // matched terminal surface id; "" if no tab found
+	Source     string // source label ("" = local; else a --docker container)
+	Container  string // resolved docker container id ("" = local)
 }
+
+func (s Session) remote() bool { return s.Container != "" }
 
 func homeDir() string { h, _ := os.UserHomeDir(); return h }
 
@@ -103,12 +107,57 @@ func procComm(pid int) string {
 	return filepath.Base(strings.TrimSpace(string(out)))
 }
 
-// loadSessions reads the registry, keeps live Claude sessions, attaches titles,
-// matches each to a Ghostty terminal, and returns them sorted by cwd.
+// loadSessions gathers live Claude sessions from every source (local + any
+// --docker containers), matches each to a terminal surface, and sorts by cwd.
 func loadSessions() []Session {
 	if demoMode() {
 		return demoSessions()
 	}
+	var out []Session
+	for _, src := range allSources() {
+		if src.kind == srcDocker {
+			out = append(out, dockerSessions(src)...)
+		} else {
+			out = append(out, localSessions()...)
+		}
+	}
+
+	// Pair sessions to terminal surfaces. Local sessions match exactly (tty) or
+	// by cwd+title; container sessions can't (tty/cwd are namespaced) so they
+	// match on title alone — the ai-title escape still reaches the host tab.
+	// Order matters: exact local first, then remote-by-title, then untitled
+	// local, so nothing steals a better match.
+	terms := activeDriver().Surfaces()
+	used := map[string]bool{}
+	for i := range out {
+		if !out[i].remote() {
+			out[i].SurfaceID = matchTerminal(terms, used, out[i])
+		}
+	}
+	for i := range out {
+		if out[i].remote() {
+			out[i].SurfaceID = matchByTitle(terms, used, out[i])
+		}
+	}
+	for i := range out {
+		if !out[i].remote() && out[i].SurfaceID == "" && out[i].Title == "" {
+			out[i].SurfaceID = matchUntitled(terms, used, out[i])
+		}
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CWD != out[j].CWD {
+			return out[i].CWD < out[j].CWD
+		}
+		return out[i].UpdatedAt > out[j].UpdatedAt
+	})
+	return out
+}
+
+// localSessions reads the host registry and keeps live Claude sessions with
+// their title/model/preview attached (no surface matching — that's done by the
+// aggregator so remote and local share one used-set).
+func localSessions() []Session {
 	entries, err := os.ReadDir(sessionsDir())
 	if err != nil {
 		return nil
@@ -145,28 +194,6 @@ func loadSessions() []Session {
 		s.Tty = procTty(rf.PID)
 		out = append(out, s)
 	}
-
-	// Pair sessions to terminal surfaces in two passes so an untitled session
-	// can't steal a titled one's surface. Pass 1: exact (tty) or cwd+title.
-	// Pass 2: not-yet-titled sessions → a fresh Claude tab in the same dir
-	// (needed on terminals without tty, e.g. Ghostty 1.3.1).
-	terms := activeDriver().Surfaces()
-	used := map[string]bool{}
-	for i := range out {
-		out[i].SurfaceID = matchTerminal(terms, used, out[i])
-	}
-	for i := range out {
-		if out[i].SurfaceID == "" && out[i].Title == "" {
-			out[i].SurfaceID = matchUntitled(terms, used, out[i])
-		}
-	}
-
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].CWD != out[j].CWD {
-			return out[i].CWD < out[j].CWD
-		}
-		return out[i].UpdatedAt > out[j].UpdatedAt
-	})
 	return out
 }
 

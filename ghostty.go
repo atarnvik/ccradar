@@ -77,6 +77,6 @@ const ghosttyResumeScript = `on run argv
   end tell
 end run`
 
-func (ghosttyDriver) OpenResume(cwd, sid string) error {
-	return osaRun(ghosttyResumeScript, cwd, resumeCommand(sid)+"\n")
+func (ghosttyDriver) OpenResume(cwd, command string) error {
+	return osaRun(ghosttyResumeScript, cwd, command+"\n")
 }

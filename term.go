@@ -22,7 +22,8 @@ type TermDriver interface {
 	Name() string
 	Surfaces() []Terminal
 	Focus(id string) error
-	OpenResume(cwd, sid string) error
+	// OpenResume opens a new tab/window in cwd and runs command there.
+	OpenResume(cwd, command string) error
 }
 
 var cachedDriver TermDriver
@@ -80,6 +81,25 @@ func matchTerminal(terms []Terminal, used map[string]bool, s Session) string {
 			continue
 		}
 		if t.CWD == s.CWD && strings.Contains(t.Title, s.Title) {
+			used[t.ID] = true
+			return t.ID
+		}
+	}
+	return ""
+}
+
+// matchByTitle pairs a session to an unclaimed surface by title alone. Used for
+// container sessions, whose tty and cwd are namespaced and can't match a host
+// surface — but Claude's title escape still bubbles up to the host tab.
+func matchByTitle(terms []Terminal, used map[string]bool, s Session) string {
+	if s.Title == "" {
+		return ""
+	}
+	for _, t := range terms {
+		if used[t.ID] {
+			continue
+		}
+		if strings.Contains(t.Title, s.Title) {
 			used[t.ID] = true
 			return t.ID
 		}
@@ -159,8 +179,8 @@ func resumeCommand(sessionID string) string {
 	return "claude --resume " + sessionID
 }
 
-// copyResumeCommand puts a ready-to-paste resume command on the clipboard.
-func copyResumeCommand(cwd, sessionID string) error {
+// copyToClipboard puts text on the macOS clipboard.
+func copyToClipboard(text string) error {
 	cmd := exec.Command("pbcopy")
 	in, err := cmd.StdinPipe()
 	if err != nil {
@@ -169,7 +189,7 @@ func copyResumeCommand(cwd, sessionID string) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	_, _ = in.Write([]byte("cd " + shellQuote(cwd) + " && " + resumeCommand(sessionID)))
+	_, _ = in.Write([]byte(text))
 	_ = in.Close()
 	return cmd.Wait()
 }

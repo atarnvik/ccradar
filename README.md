@@ -57,9 +57,10 @@ go install github.com/atarnvik/ccradar@latest
 Then:
 
 ```sh
-ccradar              # all sessions
-ccradar ~/src/app    # only sessions in that directory and its subdirectories
-ccradar --version    # print the installed version
+ccradar                          # all local sessions
+ccradar ~/src/app                # only sessions in that directory and its subdirectories
+ccradar --docker my-devcontainer # local + sessions running inside a container (see below)
+ccradar --version                # print the installed version
 ```
 
 Or build from source:
@@ -123,6 +124,23 @@ Ghostty) or window (Terminal.app) running `claude --resume`.
 Sessions are classified by tab reachability: **open** (focusable), **detached**
 (live but no tab), **historical** (no process). Heartbeat isn't used for liveness —
 idle sessions stop heartbeating — so liveness is the live pid plus the tab match.
+
+## Devcontainers
+
+If you run Claude *inside* a container, add it as an extra source (repeatable):
+
+```sh
+ccradar --docker my-devcontainer          # container name or compose service
+ccradar --docker my-devcontainer=/root/.claude   # if ~/.claude lives elsewhere
+```
+
+ccradar reads that container's sessions over a single `docker exec` per refresh
+(only the append-only JSON/JSONL — never the sqlite db, so no WAL/lock risk).
+Container rows are tagged `⬢ <name>`. Because a container's tty and cwd are
+namespaced, they're matched to a host tab **by title** — which works because
+Claude's title escape still reaches the host Ghostty tab. `enter` on a
+container session focuses that tab, or (if none) opens a new host tab that
+`docker exec`s in and runs `claude --resume`. Requires `docker` on your PATH.
 
 ## Limitations
 
