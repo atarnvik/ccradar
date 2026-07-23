@@ -715,9 +715,9 @@ func (m *model) activate() {
 			m.flash = "→ focused " + filepath.Base(s.CWD)
 		case s.remote():
 			// live container session with no matched host tab → open one exec'd in
-			cwd, cmd := resumeInvocation(s.CWD, s.Container, s.SessionID)
+			cwd, cmd := resumeInvocation(s.CWD, s.Container, s.Source, s.SessionID)
 			if err := activeDriver().OpenResume(cwd, cmd); err != nil {
-				_ = copyToClipboard(resumeClipboard(s.CWD, s.Container, s.SessionID))
+				_ = copyToClipboard(resumeClipboard(s.CWD, s.Container, s.Source, s.SessionID))
 				m.flash = "couldn't open tab — command copied"
 			} else {
 				m.flash = "↻ opening " + filepath.Base(s.CWD) + " (" + s.Source + ")"
@@ -727,9 +727,9 @@ func (m *model) activate() {
 		}
 	case rowHist:
 		h := r.hist
-		cwd, cmd := resumeInvocation(h.CWD, h.Container, h.SessionID)
+		cwd, cmd := resumeInvocation(h.CWD, h.Container, h.Source, h.SessionID)
 		if err := activeDriver().OpenResume(cwd, cmd); err != nil {
-			_ = copyToClipboard(resumeClipboard(h.CWD, h.Container, h.SessionID))
+			_ = copyToClipboard(resumeClipboard(h.CWD, h.Container, h.Source, h.SessionID))
 			m.flash = "couldn't open tab — resume command copied to clipboard"
 		} else {
 			m.flash = "↻ resuming " + filepath.Base(h.CWD) + " in a new tab"
@@ -773,12 +773,12 @@ func (m *model) copyResume() {
 	r := m.rows[m.cursor]
 	switch r.kind {
 	case rowHist:
-		if copyToClipboard(resumeClipboard(r.hist.CWD, r.hist.Container, r.hist.SessionID)) == nil {
+		if copyToClipboard(resumeClipboard(r.hist.CWD, r.hist.Container, r.hist.Source, r.hist.SessionID)) == nil {
 			m.flash = "copied resume command"
 		}
 	case rowSession:
 		if r.session.remote() {
-			if copyToClipboard(resumeClipboard(r.session.CWD, r.session.Container, r.session.SessionID)) == nil {
+			if copyToClipboard(resumeClipboard(r.session.CWD, r.session.Container, r.session.Source, r.session.SessionID)) == nil {
 				m.flash = "copied resume command"
 			}
 		}

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,30 @@ type Source struct {
 	label     string // shown in the UI ("" for local)
 	selector  string // docker: container name/id or compose service
 	claudeDir string // docker: path to ~/.claude inside the container
+	user      string // docker: the user that owns the sessions (for resume)
+}
+
+// sourceByLabel finds a configured docker source by its UI label.
+func sourceByLabel(label string) (Source, bool) {
+	for _, s := range extraSources {
+		if s.label == label {
+			return s, true
+		}
+	}
+	return Source{}, false
+}
+
+// inferDockerUser guesses the owning user from a claude dir path
+// (/home/<user>/.claude → <user>, /root/... → root).
+func inferDockerUser(dir string) string {
+	p := strings.Split(strings.TrimPrefix(dir, "/"), "/")
+	if len(p) >= 2 && p[0] == "home" {
+		return p[1]
+	}
+	if len(p) >= 1 && p[0] == "root" {
+		return "root"
+	}
+	return ""
 }
 
 // extraSources holds docker sources parsed from the command line.
@@ -39,7 +64,7 @@ func parseDockerSource(arg string) Source {
 	if i := strings.IndexByte(arg, '='); i >= 0 {
 		sel, dir = arg[:i], arg[i+1:]
 	}
-	return Source{kind: srcDocker, label: sel, selector: sel, claudeDir: dir}
+	return Source{kind: srcDocker, label: sel, selector: sel, claudeDir: dir, user: inferDockerUser(dir)}
 }
 
 // resolveContainer maps a selector to a concrete running container id, trying a
@@ -78,26 +103,39 @@ func dockerShell() string {
 
 // resumeInvocation returns (cwd, command) to open in a new tab to resume a
 // session. Local runs claude directly in cwd; a container session runs it via
-// docker exec (in a host tab, so it stays focusable), with -w for the in-
-// container dir and an interactive login shell so claude is on PATH.
-func resumeInvocation(cwd, container, sid string) (string, string) {
-	if container != "" {
-		return homeDir(), "docker exec -it -w " + shellQuote(cwd) + " " + shellQuote(container) +
-			" " + dockerShell() + " " + shellQuote("claude --resume "+sid)
+// docker exec in a host tab (so it stays focusable): as the owning user with
+// their HOME (docker exec otherwise runs as root with the wrong ~/.claude and
+// PATH), -w for the in-container dir, and an interactive login shell so claude
+// is on PATH.
+func resumeInvocation(cwd, container, sourceLabel, sid string) (string, string) {
+	if container == "" {
+		return cwd, resumeCommand(sid)
 	}
-	return cwd, resumeCommand(sid)
+	parts := []string{"docker", "exec"}
+	if src, ok := sourceByLabel(sourceLabel); ok {
+		if src.user != "" {
+			parts = append(parts, "-u", src.user)
+		}
+		if home := filepath.Dir(src.claudeDir); home != "" && home != "." && home != "/" {
+			parts = append(parts, "-e", "HOME="+home)
+		}
+	}
+	parts = append(parts, "-it", "-w", shellQuote(cwd), shellQuote(container),
+		dockerShell(), shellQuote("claude --resume "+sid))
+	return homeDir(), strings.Join(parts, " ")
 }
 
 // resumeClipboard is the paste-able form of the resume command.
-func resumeClipboard(cwd, container, sid string) string {
+func resumeClipboard(cwd, container, sourceLabel, sid string) string {
 	if container != "" {
-		_, cmd := resumeInvocation(cwd, container, sid)
+		_, cmd := resumeInvocation(cwd, container, sourceLabel, sid)
 		return cmd
 	}
 	return "cd " + shellQuote(cwd) + " && " + resumeCommand(sid)
 }
 
-// dockerKill sends SIGTERM to a session's process inside its container.
+// dockerKill sends SIGTERM to a session's process inside its container (as root,
+// which can signal any pid).
 func dockerKill(container string, pid int) error {
 	if container == "" || pid <= 0 {
 		return nil
