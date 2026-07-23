@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/atarnvik/ccradar/compare/v0.6.0...v0.7.0) (2026-07-23)
+
+
+### Features
+
+* read container history and group both views by source ([b9f3375](https://github.com/atarnvik/ccradar/commit/b9f33755f1885d24e173f267e6e7375115642dd9))
+* read sessions from Docker containers (--docker) ([e3d4ed1](https://github.com/atarnvik/ccradar/commit/e3d4ed109ca07242bd3b5b10c5982c2e49d3e1fe))
+
+
+### Bug Fixes
+
+* resume container sessions as the owning user with HOME ([38d647b](https://github.com/atarnvik/ccradar/commit/38d647b6048af51f2e549bfd380e5a172e88f888))
+* resume container sessions via an interactive login shell ([31fa31c](https://github.com/atarnvik/ccradar/commit/31fa31c3d614f8a9cca94a9e20691e4078f57ad2))
+
 ## [0.6.0](https://github.com/atarnvik/ccradar/compare/v0.5.0...v0.6.0) (2026-06-16)
 
 
