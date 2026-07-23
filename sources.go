@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -64,14 +65,25 @@ func resolveContainer(selector string) string {
 	return selector
 }
 
+// dockerShell is the in-container shell used to launch claude on resume. An
+// interactive login shell (-lic) so it sources ~/.bashrc, where devcontainers
+// usually put claude's PATH (nvm / ~/.local/bin / the native installer). Override
+// with CCRADAR_DOCKER_SHELL (e.g. "zsh -lic") if your setup differs.
+func dockerShell() string {
+	if v := os.Getenv("CCRADAR_DOCKER_SHELL"); strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	return "bash -lic"
+}
+
 // resumeInvocation returns (cwd, command) to open in a new tab to resume a
 // session. Local runs claude directly in cwd; a container session runs it via
 // docker exec (in a host tab, so it stays focusable), with -w for the in-
-// container dir and a login shell so claude is on PATH.
+// container dir and an interactive login shell so claude is on PATH.
 func resumeInvocation(cwd, container, sid string) (string, string) {
 	if container != "" {
 		return homeDir(), "docker exec -it -w " + shellQuote(cwd) + " " + shellQuote(container) +
-			" bash -lc " + shellQuote("claude --resume "+sid)
+			" " + dockerShell() + " " + shellQuote("claude --resume "+sid)
 	}
 	return cwd, resumeCommand(sid)
 }

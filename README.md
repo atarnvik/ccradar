@@ -146,6 +146,11 @@ host Ghostty tab. `enter` focuses that tab, or (if none) opens a new host tab
 that `docker exec`s in and runs `claude --resume`; `x` kills inside the
 container. Requires `docker` on your PATH.
 
+Resume launches Claude with an interactive login shell (`bash -lic`) so it picks
+up `claude` from your `~/.bashrc` (nvm, `~/.local/bin`, the native installer,
+etc.). If your container uses a different shell, set `CCRADAR_DOCKER_SHELL`, e.g.
+`CCRADAR_DOCKER_SHELL='zsh -lic'`.
+
 ## Limitations
 
 - macOS only (built on each terminal's AppleScript API).
