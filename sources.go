@@ -4,6 +4,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // A Source is a place ccradar reads Claude sessions from: the local machine, or
@@ -133,7 +134,61 @@ func dockerSessions(src Source) []Session {
 	return parseDockerSessions(string(out), src.label, cid)
 }
 
-// parseDockerSessions turns the script's US-delimited rows into live Sessions.
+// dockerHistoryScript emits, per recent transcript (newest first, capped): mtime,
+// sessionId, cwd, title, model, branch, lastPrompt — US-delimited.
+func dockerHistoryScript(claudeDir string) string {
+	return `CL=` + shellQuote(claudeDir) + `
+US=$(printf '\037')
+ls -t "$CL"/projects/*/*.jsonl 2>/dev/null | head -60 | while IFS= read -r t; do
+  [ -e "$t" ] || continue
+  sid=$(basename "$t" .jsonl)
+  mt=$(stat -c %Y "$t" 2>/dev/null || echo 0)
+  cwd=$(grep -m1 '"cwd"' "$t" 2>/dev/null | sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p')
+  [ -n "$cwd" ] || continue
+  ti=$(grep '"type":"ai-title"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"aiTitle":"\([^"]*\)".*/\1/p')
+  mo=$(grep '"type":"assistant"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
+  br=$(grep -o '"gitBranch":"[^"]*"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"gitBranch":"\([^"]*\)".*/\1/p')
+  pr=$(grep '"type":"last-prompt"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"lastPrompt":"\([^"]*\)".*/\1/p' | cut -c1-200)
+  printf '%s%s%s%s%s%s%s%s%s%s%s%s%s\n' "$mt" "$US" "$sid" "$US" "$cwd" "$US" "$ti" "$US" "$mo" "$US" "$br" "$US" "$pr"
+done`
+}
+
+// dockerHistory reads recent past sessions from a container, excluding live ones.
+func dockerHistory(src Source, activeIDs map[string]bool) []HistEntry {
+	cid := resolveContainer(src.selector)
+	if cid == "" {
+		return nil
+	}
+	out, err := exec.Command("docker", "exec", cid, "sh", "-c", dockerHistoryScript(src.claudeDir)).Output()
+	if err != nil {
+		return nil
+	}
+	return parseDockerHistory(string(out), src.label, cid, activeIDs)
+}
+
+// parseDockerHistory turns the history script's rows into HistEntries.
+func parseDockerHistory(out, label, container string, activeIDs map[string]bool) []HistEntry {
+	var hs []HistEntry
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		p := strings.Split(line, "\x1f")
+		if len(p) < 7 {
+			continue
+		}
+		sid := p[1]
+		if activeIDs[sid] {
+			continue // shown in the Active view already
+		}
+		mt, _ := strconv.ParseInt(p[0], 10, 64)
+		hs = append(hs, HistEntry{
+			SessionID: sid, CWD: p[2], Title: p[3], Model: p[4], Branch: p[5],
+			LastPrompt: p[6], ModAt: time.Unix(mt, 0), Source: label, Container: container,
+		})
+	}
+	return hs
+}
 func parseDockerSessions(out, label, container string) []Session {
 	var sessions []Session
 	for _, line := range strings.Split(out, "\n") {

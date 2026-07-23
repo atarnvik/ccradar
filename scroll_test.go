@@ -340,6 +340,24 @@ func TestParseDockerSessions(t *testing.T) {
 	}
 }
 
+func TestParseDockerHistory(t *testing.T) {
+	us := "\x1f"
+	rows := strings.Join([]string{
+		strings.Join([]string{"1700000000", "sid-h", "/workspaces/app", "Add spans", "claude-opus-4-8", "main", "instrument the pipeline"}, us),
+		strings.Join([]string{"1699999999", "sid-live", "/workspaces/app", "Live", "claude-opus-4-8", "main", "x"}, us),
+	}, "\n")
+	got := parseDockerHistory(rows, "yogi", "cid1", map[string]bool{"sid-live": true})
+	if len(got) != 1 {
+		t.Fatalf("want 1 (live excluded), got %d", len(got))
+	}
+	h := got[0]
+	if h.SessionID != "sid-h" || h.CWD != "/workspaces/app" || h.Title != "Add spans" ||
+		h.Branch != "main" || h.LastPrompt != "instrument the pipeline" ||
+		h.Source != "yogi" || h.Container != "cid1" || h.ModAt.Unix() != 1700000000 {
+		t.Fatalf("wrong: %+v", h)
+	}
+}
+
 func TestMatchByTitle(t *testing.T) {
 	terms := []Terminal{{ID: "host-tab", Tty: "/dev/ttys004", CWD: "/Users/me/x", Title: "✳ Fix the bug"}}
 	used := map[string]bool{}

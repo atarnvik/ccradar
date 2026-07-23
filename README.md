@@ -134,13 +134,17 @@ ccradar --docker my-devcontainer          # container name or compose service
 ccradar --docker my-devcontainer=/root/.claude   # if ~/.claude lives elsewhere
 ```
 
-ccradar reads that container's sessions over a single `docker exec` per refresh
-(only the append-only JSON/JSONL — never the sqlite db, so no WAL/lock risk).
-Container rows are tagged `⬢ <name>`. Because a container's tty and cwd are
-namespaced, they're matched to a host tab **by title** — which works because
-Claude's title escape still reaches the host Ghostty tab. `enter` on a
-container session focuses that tab, or (if none) opens a new host tab that
-`docker exec`s in and runs `claude --resume`. Requires `docker` on your PATH.
+Both the **Active and Historical** views are read from the container over a
+single `docker exec` per refresh (only the append-only JSON/JSONL — never the
+sqlite db, so no WAL/lock risk). Sessions are grouped into **sections** — a
+`local` section, then one per container (`⬢ <name>`) — each with its usual
+directory sub-groups.
+
+Because a container's tty and cwd are namespaced, sessions are matched to a host
+tab **by title**, which works because Claude's title escape still reaches the
+host Ghostty tab. `enter` focuses that tab, or (if none) opens a new host tab
+that `docker exec`s in and runs `claude --resume`; `x` kills inside the
+container. Requires `docker` on your PATH.
 
 ## Limitations
 

@@ -36,7 +36,7 @@ func demoSessions() []Session {
 		}
 		return s
 	}
-	return []Session{
+	local := []Session{
 		mk("src/api-gateway", "busy", "Add rate-limiting middleware", "claude-opus-4-8", "main",
 			"add a per-IP token-bucket limiter to the gateway middleware",
 			"I'll add a per-IP token bucket backed by an in-memory store, keyed by client IP, with a configurable refill rate.", 2*min, true),
@@ -56,6 +56,21 @@ func demoSessions() []Session {
 			"port the hand-rolled flag parsing over to cobra",
 			"Migrated the root command and three subcommands to cobra; flag names and defaults are unchanged.", 3*hr, false), // detached
 	}
+	// A devcontainer source (shows as its own section).
+	mkr := func(cwd, status, title, model, branch, prompt string, age int64) Session {
+		return Session{
+			PID: 5000, SessionID: "demo-c-" + title, CWD: cwd, Status: status,
+			UpdatedAt: now - age, Title: title, Model: model, Branch: branch,
+			LastPrompt: prompt, Source: "yogi-devcontainer", Container: "demo", SurfaceID: "demo",
+		}
+	}
+	local = append(local,
+		mkr("/workspaces/orders-svc", "busy", "Add idempotency keys to checkout", "claude-opus-4-8", "main",
+			"make the checkout endpoint idempotent with request keys", 3*min),
+		mkr("/workspaces/orders-svc", "waiting", "Upgrade the pg driver", "claude-sonnet-4-6", "deps",
+			"bump the postgres driver and fix the breaking changes", 9*min),
+	)
+	return local
 }
 
 func demoHistory() []HistEntry {
@@ -66,7 +81,7 @@ func demoHistory() []HistEntry {
 			Branch: "main", LastPrompt: prompt, LastReply: reply, ModAt: now.Add(-age),
 		}
 	}
-	return []HistEntry{
+	list := []HistEntry{
 		mk("src/web-app", "Set up Vitest and React Testing Library", "claude-sonnet-4-6",
 			"set up vitest with react testing library",
 			"Configured Vitest with jsdom and RTL, plus a sample component test and an npm script.", 2*time.Hour),
@@ -80,6 +95,14 @@ func demoHistory() []HistEntry {
 			"draft an outline for the Q3 planning doc",
 			"Drafted an outline: goals, bets, staffing, risks, and a rough timeline.", 50*time.Hour),
 	}
+	list = append(list,
+		HistEntry{
+			SessionID: "demo-c-hist", CWD: "/workspaces/orders-svc", Title: "Add OpenTelemetry spans",
+			Model: "claude-opus-4-8", Branch: "main", LastPrompt: "instrument the order pipeline with otel spans",
+			ModAt: now.Add(-7 * time.Hour), Source: "yogi-devcontainer", Container: "demo",
+		},
+	)
+	return list
 }
 
 // demoDriver is a no-op terminal so focus/resume don't touch real apps.

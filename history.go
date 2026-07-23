@@ -22,6 +22,8 @@ type HistEntry struct {
 	LastPrompt string    // most recent user prompt (for the preview pane)
 	LastReply  string    // most recent assistant text (for the preview pane)
 	ModAt      time.Time // transcript file mtime ≈ last activity
+	Source     string    // source label ("" = local; else a --docker container)
+	Container  string    // resolved docker container id ("" = local)
 }
 
 // histScanLimit caps how many recent transcripts we parse, so a big history
@@ -32,12 +34,25 @@ const (
 	histScanLimitFiltered = 500
 )
 
-// loadHistory returns recent past sessions (most-recent transcripts first),
-// excluding any session id currently live.
+// loadHistory returns recent past sessions across all sources (most-recent
+// first per source), excluding any session id currently live.
 func loadHistory(activeIDs map[string]bool) []HistEntry {
 	if demoMode() {
 		return demoHistory()
 	}
+	var out []HistEntry
+	for _, src := range allSources() {
+		if src.kind == srcDocker {
+			out = append(out, dockerHistory(src, activeIDs)...)
+		} else {
+			out = append(out, localHistory(activeIDs)...)
+		}
+	}
+	return out
+}
+
+// localHistory returns recent past sessions from the host (most-recent first).
+func localHistory(activeIDs map[string]bool) []HistEntry {
 	paths, _ := filepath.Glob(filepath.Join(projectsDir(), "*", "*.jsonl"))
 	if len(paths) == 0 {
 		return nil

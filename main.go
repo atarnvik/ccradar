@@ -27,6 +27,7 @@ var (
 	styPrevTtl  = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 	styPrevLbl  = lipgloss.NewStyle().Foreground(lipgloss.Color("44")).Bold(true)
 	styPrevBody = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	stySection  = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
 	styTab      = lipgloss.NewStyle().Foreground(lipgloss.Color("44"))
 	styCursor   = lipgloss.NewStyle().Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231")).Bold(true)
 	styHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -54,7 +55,8 @@ const (
 type rowKind int
 
 const (
-	rowHeader rowKind = iota
+	rowSection rowKind = iota // a source section header (Local / a container)
+	rowHeader                 // a directory header within a section
 	rowDivider
 	rowSession
 	rowHist
@@ -199,53 +201,106 @@ func dirDisplay(cwd string) string {
 
 func (m *model) rebuild() {
 	var rows []row
-	prev := ""
-	header := func(cwd, src string) {
-		if cwd != prev {
-			prev = cwd
-			h := dirDisplay(cwd)
-			if src != "" { // tag container sources so local vs remote is obvious
-				h = "⬢ " + src + "  " + h
+
+	// dirGroup appends directory headers + rows for one contiguous group.
+	dirGroupSessions := func(ss []Session) {
+		prev := ""
+		for _, s := range ss {
+			if s.CWD != prev {
+				prev = s.CWD
+				rows = append(rows, row{kind: rowHeader, header: dirDisplay(s.CWD)})
 			}
-			rows = append(rows, row{kind: rowHeader, header: h})
-		}
-	}
-	if m.view == viewActive {
-		m.sortSessions(m.sessions)
-		// Partition: focusable (has a Ghostty tab) vs detached (live but no tab).
-		var open, detached []Session
-		for _, s := range m.sessions {
-			if !fuzzyMatch(m.query, sessionHay(s)) {
-				continue
-			}
-			if s.SurfaceID != "" {
-				open = append(open, s)
-			} else {
-				detached = append(detached, s)
-			}
-		}
-		for _, s := range open {
-			header(s.CWD, s.Source)
 			rows = append(rows, row{kind: rowSession, session: s})
 		}
-		if len(detached) > 0 {
-			rows = append(rows, row{kind: rowDivider, header: "detached · no open tab (closed tab / tmux / ssh)"})
-			for _, s := range detached {
-				rows = append(rows, row{kind: rowSession, session: s})
+	}
+
+	if m.view == viewActive {
+		m.sortSessions(m.sessions)
+		order := sessionSources(m.sessions)
+		sectioned := len(order) > 1
+		for _, src := range order {
+			var open, detached []Session
+			for _, s := range m.sessions {
+				if s.Source != src || !fuzzyMatch(m.query, sessionHay(s)) {
+					continue
+				}
+				if s.SurfaceID != "" {
+					open = append(open, s)
+				} else {
+					detached = append(detached, s)
+				}
+			}
+			if len(open) == 0 && len(detached) == 0 {
+				continue
+			}
+			if sectioned {
+				rows = append(rows, row{kind: rowSection, header: sectionLabel(src)})
+			}
+			dirGroupSessions(open)
+			if len(detached) > 0 {
+				rows = append(rows, row{kind: rowDivider, header: "detached · no matching tab"})
+				dirGroupSessions(detached)
 			}
 		}
 	} else {
 		m.sortHistory(m.history)
-		for _, h := range m.history {
-			if !fuzzyMatch(m.query, histHay(h)) {
-				continue
+		order := histSources(m.history)
+		sectioned := len(order) > 1
+		for _, src := range order {
+			prev := ""
+			var any bool
+			for _, h := range m.history {
+				if h.Source != src || !fuzzyMatch(m.query, histHay(h)) {
+					continue
+				}
+				if !any && sectioned {
+					rows = append(rows, row{kind: rowSection, header: sectionLabel(src)})
+				}
+				any = true
+				if h.CWD != prev {
+					prev = h.CWD
+					rows = append(rows, row{kind: rowHeader, header: dirDisplay(h.CWD)})
+				}
+				rows = append(rows, row{kind: rowHist, hist: h})
 			}
-			header(h.CWD, "")
-			rows = append(rows, row{kind: rowHist, hist: h})
 		}
 	}
 	m.rows = rows
 	m.clampCursor()
+}
+
+// sectionLabel names a source section.
+func sectionLabel(src string) string {
+	if src == "" {
+		return "local"
+	}
+	return "⬢ " + src
+}
+
+// sessionSources / histSources list the distinct sources present, local ("")
+// first, then containers in first-seen order.
+func sessionSources(ss []Session) []string {
+	order := []string{""}
+	seen := map[string]bool{"": true}
+	for _, s := range ss {
+		if !seen[s.Source] {
+			seen[s.Source] = true
+			order = append(order, s.Source)
+		}
+	}
+	return order
+}
+
+func histSources(hs []HistEntry) []string {
+	order := []string{""}
+	seen := map[string]bool{"": true}
+	for _, h := range hs {
+		if !seen[h.Source] {
+			seen[h.Source] = true
+			order = append(order, h.Source)
+		}
+	}
+	return order
 }
 
 // sortSessions orders sessions per the current sort mode, keeping each
@@ -671,12 +726,13 @@ func (m *model) activate() {
 			m.flash = fmt.Sprintf("detached (pid %d) — no tab to focus; press x to kill", s.PID)
 		}
 	case rowHist:
-		cwd, cmd := resumeInvocation(r.hist.CWD, "", r.hist.SessionID)
+		h := r.hist
+		cwd, cmd := resumeInvocation(h.CWD, h.Container, h.SessionID)
 		if err := activeDriver().OpenResume(cwd, cmd); err != nil {
-			_ = copyToClipboard(resumeClipboard(r.hist.CWD, "", r.hist.SessionID))
+			_ = copyToClipboard(resumeClipboard(h.CWD, h.Container, h.SessionID))
 			m.flash = "couldn't open tab — resume command copied to clipboard"
 		} else {
-			m.flash = "↻ resuming " + filepath.Base(r.hist.CWD) + " in a new tab"
+			m.flash = "↻ resuming " + filepath.Base(h.CWD) + " in a new tab"
 		}
 	}
 }
@@ -717,7 +773,7 @@ func (m *model) copyResume() {
 	r := m.rows[m.cursor]
 	switch r.kind {
 	case rowHist:
-		if copyToClipboard(resumeClipboard(r.hist.CWD, "", r.hist.SessionID)) == nil {
+		if copyToClipboard(resumeClipboard(r.hist.CWD, r.hist.Container, r.hist.SessionID)) == nil {
 			m.flash = "copied resume command"
 		}
 	case rowSession:
@@ -922,6 +978,12 @@ func padVis(s string, vis, cw int) string {
 func (m model) renderListLine(i, cw int) string {
 	r := m.rows[i]
 	switch r.kind {
+	case rowSection:
+		s := "━━ " + r.header + " "
+		if pad := cw - len([]rune(s)); pad > 0 {
+			s += strings.Repeat("━", pad)
+		}
+		return stySection.Render(truncPad(s, cw))
 	case rowHeader:
 		return styHeader.Render(truncPad(r.header, cw))
 	case rowDivider:

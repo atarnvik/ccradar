@@ -25,9 +25,9 @@ Sleep 2.2s
 Type "p"
 Sleep 1.2s
 
-# Move through the active sessions (preview follows the selection).
-Down@600ms 4
-Sleep 1s
+# Move down through local into the container section (preview follows).
+Down@450ms 8
+Sleep 1.2s
 
 # Fuzzy search across directory + title.
 Type "/"
