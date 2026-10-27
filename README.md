@@ -32,7 +32,8 @@ data and drives your terminal through its AppleScript API. No daemon, no network
   `n`; the choice is remembered. (Click-to-jump needs `terminal-notifier`, which
   the Homebrew install pulls in automatically.)
 - **Fuzzy search** (`/`) across directory + session title, and a **sort toggle**
-  (`s`) between alphabetical and last-active.
+  (`s`) between last-active (the default) and alphabetical; the choice is
+  remembered.
 - Each row shows the **model** in use; live auto-refresh, status/age at a glance,
   directory grouping.
 - **Update check** — on launch ccradar checks GitHub for the latest release and,
@@ -97,7 +98,7 @@ go build -o ccradar . && ./ccradar
 | `tab` (or `1`/`2`) | switch Active / Historical |
 | `enter` | Active: focus tab · Historical: resume in a new tab |
 | `/` | fuzzy search (directory + title); `enter` keep, `esc` clear |
-| `s` | toggle sort: alphabetical ↔ last-active |
+| `s` | toggle sort: last-active (default) ↔ alphabetical (remembered across runs) |
 | `p` | toggle the preview pane |
 | `n` | toggle busy→idle notifications (remembered across runs) |
 | `c` | Historical: copy `cd <dir> && claude --resume <id>` to clipboard |

@@ -48,8 +48,8 @@ const (
 type sortMode int
 
 const (
-	sortAlpha  sortMode = iota // directory A→Z, then title A→Z
-	sortRecent                 // groups & rows by last-active, newest first
+	sortRecent sortMode = iota // groups & rows by last-active, newest first (default)
+	sortAlpha                  // directory A→Z, then title A→Z
 )
 
 type rowKind int
@@ -336,7 +336,7 @@ func (m model) sortSessions(ss []Session) {
 	})
 }
 
-// sortHistory mirrors sortSessions for past sessions (activity = file mtime).
+// sortHistory mirrors sortSessions for past sessions (activity = ModAt).
 func (m model) sortHistory(hs []HistEntry) {
 	if m.sort == sortAlpha {
 		sort.SliceStable(hs, func(i, j int) bool {
@@ -373,6 +373,19 @@ func (m model) sortLabel() string {
 		return "recent"
 	}
 	return "alpha"
+}
+
+// parseSort is the inverse of sortLabel; anything but "alpha" means recent.
+func parseSort(label string) sortMode {
+	if label == "alpha" {
+		return sortAlpha
+	}
+	return sortRecent
+}
+
+// savePrefs persists the toggleable preferences (notify, preview, sort).
+func (m model) savePrefs() {
+	saveConfig(config{Notify: m.notify, Preview: m.preview, Sort: m.sortLabel()})
 }
 
 func onOff(b bool) string {
@@ -602,13 +615,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.sort = sortAlpha
 			}
+			m.savePrefs()
 			m.cursor = 0
 			m.top = 0
 			m.rebuild()
 			m.flash = "sort: " + m.sortLabel()
 		case "n":
 			m.notify = !m.notify
-			saveConfig(config{Notify: m.notify, Preview: m.preview})
+			m.savePrefs()
 			if m.notify {
 				m.flash = "notifications on (Claude finishes / needs input)"
 			} else {
@@ -616,7 +630,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "p":
 			m.preview = !m.preview
-			saveConfig(config{Notify: m.notify, Preview: m.preview})
+			m.savePrefs()
 			m.flash = "preview " + onOff(m.preview)
 		case "r":
 			if m.view == viewActive {
@@ -1197,7 +1211,7 @@ func main() {
 		return
 	}
 	cfg := loadConfig()
-	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview}, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort)}, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

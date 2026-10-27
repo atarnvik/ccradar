@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -448,5 +449,25 @@ func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
 		if m.top != 0 {
 			t.Fatalf("@h=%d scrolled-up view should have top=0, got %d", m.height, m.top)
 		}
+	}
+}
+
+func TestSortPreference(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if got := parseSort(loadConfig().Sort); got != sortRecent {
+		t.Fatalf("default sort = %v, want recent", got)
+	}
+	model{sort: sortAlpha, notify: true}.savePrefs()
+	c := loadConfig()
+	if parseSort(c.Sort) != sortAlpha || !c.Notify {
+		t.Fatalf("saved prefs not restored: %+v", c)
+	}
+
+	// A config saved before sort was remembered falls back to recent.
+	if err := os.WriteFile(configPath(), []byte(`{"notify":false,"preview":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c := loadConfig(); parseSort(c.Sort) != sortRecent || c.Notify || !c.Preview {
+		t.Fatalf("legacy config: %+v", c)
 	}
 }
