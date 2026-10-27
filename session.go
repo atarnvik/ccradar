@@ -74,12 +74,18 @@ func underFilter(cwd string) bool {
 }
 
 type regFile struct {
-	PID       int    `json:"pid"`
-	SessionID string `json:"sessionId"`
-	CWD       string `json:"cwd"`
-	Status    string `json:"status"`
-	UpdatedAt int64  `json:"updatedAt"`
+	PID        int    `json:"pid"`
+	SessionID  string `json:"sessionId"`
+	CWD        string `json:"cwd"`
+	Status     string `json:"status"`
+	UpdatedAt  int64  `json:"updatedAt"`
+	Entrypoint string `json:"entrypoint"`
 }
+
+// headlessEntrypoint marks a `claude -p` / Agent SDK run. These register like
+// interactive sessions while they run, but have no tab to focus and nothing to
+// resume (ccradar's own finder is one).
+const headlessEntrypoint = "sdk-cli"
 
 // pidAlive reports whether the process exists (EPERM still means it's there).
 func pidAlive(pid int) bool {
@@ -172,7 +178,7 @@ func localSessions() []Session {
 			continue
 		}
 		var rf regFile
-		if json.Unmarshal(b, &rf) != nil || rf.PID == 0 {
+		if json.Unmarshal(b, &rf) != nil || rf.PID == 0 || rf.Entrypoint == headlessEntrypoint {
 			continue
 		}
 		if !underFilter(rf.CWD) {
@@ -224,8 +230,13 @@ func scanTitle(line []byte) (string, bool) {
 	return "", false
 }
 
+// syntheticModel is the placeholder model Claude records on locally generated
+// assistant turns (API errors, interrupts); it never names a real model.
+const syntheticModel = "<synthetic>"
+
 // scanModel extracts the model from a non-sidechain assistant line, if present.
-// Sidechain (sub-agent) turns are skipped so the main thread's model wins.
+// Sidechain (sub-agent) turns and synthetic turns are skipped so the main
+// thread's real model wins.
 func scanModel(line []byte) (string, bool) {
 	if !bytes.Contains(line, []byte(`"type":"assistant"`)) {
 		return "", false
@@ -236,7 +247,8 @@ func scanModel(line []byte) (string, bool) {
 			Model string `json:"model"`
 		} `json:"message"`
 	}
-	if json.Unmarshal(line, &rec) == nil && !rec.IsSidechain && rec.Message.Model != "" {
+	if json.Unmarshal(line, &rec) == nil && !rec.IsSidechain &&
+		rec.Message.Model != "" && rec.Message.Model != syntheticModel {
 		return rec.Message.Model, true
 	}
 	return "", false

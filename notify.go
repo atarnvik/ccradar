@@ -36,8 +36,9 @@ func sendNotification(title, body, execCmd string) {
 // ---- persisted preferences ----
 
 type config struct {
-	Notify  bool `json:"notify"`
-	Preview bool `json:"preview"`
+	Notify  bool   `json:"notify"`
+	Preview bool   `json:"preview"`
+	Sort    string `json:"sort"` // "recent" or "alpha"
 }
 
 func configPath() string {
@@ -48,10 +49,10 @@ func configPath() string {
 }
 
 // loadConfig reads saved preferences: notifications default on, the preview pane
-// off (opt-in via `p`). Absent keys keep the defaults (Unmarshal only sets
-// present fields), so a saved choice is always honored.
+// off (opt-in via `p`), sort by last-active. Absent keys keep the defaults
+// (Unmarshal only sets present fields), so a saved choice is always honored.
 func loadConfig() config {
-	c := config{Notify: true, Preview: false}
+	c := config{Notify: true, Preview: false, Sort: "recent"}
 	b, err := os.ReadFile(configPath())
 	if err != nil {
 		return c

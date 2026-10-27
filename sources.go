@@ -162,7 +162,7 @@ for f in "$CL"/sessions/*.json; do
   ti=; mo=; br=; pr=
   if [ -n "$t" ]; then
     ti=$(grep '"type":"ai-title"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"aiTitle":"\([^"]*\)".*/\1/p')
-    mo=$(grep '"type":"assistant"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
+    mo=$(grep '"type":"assistant"' "$t" 2>/dev/null | grep -v -e '"isSidechain":true' -e '"model":"<synthetic>"' | tail -1 | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
     br=$(grep -o '"gitBranch":"[^"]*"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"gitBranch":"\([^"]*\)".*/\1/p')
     pr=$(grep '"type":"last-prompt"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"lastPrompt":"\([^"]*\)".*/\1/p' | cut -c1-200)
   fi
@@ -185,21 +185,24 @@ func dockerSessions(src Source) []Session {
 }
 
 // dockerHistoryScript emits, per recent transcript (newest first, capped): mtime,
-// sessionId, cwd, title, model, branch, lastPrompt — US-delimited.
+// sessionId, cwd, title, model, branch, lastPrompt, last record timestamp —
+// US-delimited. Transcripts continued in another session are skipped.
 func dockerHistoryScript(claudeDir string) string {
 	return `CL=` + shellQuote(claudeDir) + `
 US=$(printf '\037')
 ls -t "$CL"/projects/*/*.jsonl 2>/dev/null | head -60 | while IFS= read -r t; do
   [ -e "$t" ] || continue
+  grep -q '"type":"continued-in"' "$t" 2>/dev/null && continue
   sid=$(basename "$t" .jsonl)
   mt=$(stat -c %Y "$t" 2>/dev/null || echo 0)
   cwd=$(grep -m1 '"cwd"' "$t" 2>/dev/null | sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p')
   [ -n "$cwd" ] || continue
   ti=$(grep '"type":"ai-title"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"aiTitle":"\([^"]*\)".*/\1/p')
-  mo=$(grep '"type":"assistant"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
+  mo=$(grep '"type":"assistant"' "$t" 2>/dev/null | grep -v -e '"isSidechain":true' -e '"model":"<synthetic>"' | tail -1 | sed -n 's/.*"model":"\([^"]*\)".*/\1/p')
   br=$(grep -o '"gitBranch":"[^"]*"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"gitBranch":"\([^"]*\)".*/\1/p')
   pr=$(grep '"type":"last-prompt"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"lastPrompt":"\([^"]*\)".*/\1/p' | cut -c1-200)
-  printf '%s%s%s%s%s%s%s%s%s%s%s%s%s\n' "$mt" "$US" "$sid" "$US" "$cwd" "$US" "$ti" "$US" "$mo" "$US" "$br" "$US" "$pr"
+  ts=$(grep -o '"timestamp":"[^"]*"' "$t" 2>/dev/null | tail -1 | sed -n 's/.*"timestamp":"\([^"]*\)".*/\1/p')
+  printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' "$mt" "$US" "$sid" "$US" "$cwd" "$US" "$ti" "$US" "$mo" "$US" "$br" "$US" "$pr" "$US" "$ts"
 done`
 }
 
@@ -231,10 +234,18 @@ func parseDockerHistory(out, label, container string, activeIDs map[string]bool)
 		if activeIDs[sid] {
 			continue // shown in the Active view already
 		}
+		// Prefer the last record timestamp: mtime moves when Claude appends
+		// untimestamped bookkeeping records to old transcripts.
 		mt, _ := strconv.ParseInt(p[0], 10, 64)
+		modAt := time.Unix(mt, 0)
+		if len(p) > 7 {
+			if ts, err := time.Parse(time.RFC3339Nano, p[7]); err == nil {
+				modAt = ts
+			}
+		}
 		hs = append(hs, HistEntry{
 			SessionID: sid, CWD: p[2], Title: p[3], Model: p[4], Branch: p[5],
-			LastPrompt: p[6], ModAt: time.Unix(mt, 0), Source: label, Container: container,
+			LastPrompt: p[6], ModAt: modAt, Source: label, Container: container,
 		})
 	}
 	return hs

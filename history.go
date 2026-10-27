@@ -21,7 +21,8 @@ type HistEntry struct {
 	Branch     string    // git branch from the transcript
 	LastPrompt string    // most recent user prompt (for the preview pane)
 	LastReply  string    // most recent assistant text (for the preview pane)
-	ModAt      time.Time // transcript file mtime ≈ last activity
+	Prompts    []string  // a sample of user prompts, first and latest (for the finder)
+	ModAt      time.Time // last activity: newest record timestamp (file mtime as fallback)
 	Source     string    // source label ("" = local; else a --docker container)
 	Container  string    // resolved docker container id ("" = local)
 }
@@ -73,7 +74,10 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 	sort.Slice(pm, func(i, j int) bool { return pm[i].mod.After(pm[j].mod) })
 
 	// Read most-recent transcripts first, stopping once we have histScanLimit
-	// matching results or have read the (filter-dependent) cap of files.
+	// matching results or have read the (filter-dependent) cap of files. mtime
+	// is only an upper bound on activity (Claude appends untimestamped records
+	// like cost-state to old transcripts), so it orders the scan but the age
+	// shown comes from the transcript's own timestamps.
 	readCap := histScanLimit
 	if dirFilter != "" {
 		readCap = histScanLimitFiltered
@@ -95,9 +99,17 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 		if tm.cwd == "" || !underFilter(tm.cwd) {
 			continue // need a directory, and it must be within the filter
 		}
+		if tm.continued {
+			continue // superseded by a forked continuation that carries its history
+		}
+		modAt := tm.last
+		if modAt.IsZero() {
+			modAt = e.mod
+		}
 		out = append(out, HistEntry{
 			SessionID: sid, CWD: tm.cwd, Title: tm.title, Model: tm.model,
-			Branch: tm.branch, LastPrompt: tm.prompt, LastReply: tm.reply, ModAt: e.mod,
+			Branch: tm.branch, LastPrompt: tm.prompt, LastReply: tm.reply,
+			Prompts: tm.prompts, ModAt: modAt,
 		})
 	}
 
@@ -114,11 +126,33 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 // transcriptMeta is everything we extract from one transcript in a single pass.
 type transcriptMeta struct {
 	cwd, title, model, branch, prompt, reply string
+	prompts                                  []string  // distinct user prompts: the first few and the latest few
+	last                                     time.Time // newest top-level record timestamp
+	continued                                bool      // a continued-in record: this session was forked into another
+}
+
+// How many of a session's opening and latest prompts transcriptMeta keeps.
+const (
+	promptsKeepFirst = 2
+	promptsKeepLast  = 4
+)
+
+// notePrompt records a user prompt, skipping a repeat of the previous one and
+// dropping middle prompts once more than first+last are held.
+func (tm *transcriptMeta) notePrompt(p string) {
+	if n := len(tm.prompts); n > 0 && tm.prompts[n-1] == p {
+		return
+	}
+	tm.prompts = append(tm.prompts, p)
+	if len(tm.prompts) > promptsKeepFirst+promptsKeepLast {
+		tm.prompts = append(tm.prompts[:promptsKeepFirst], tm.prompts[promptsKeepFirst+1:]...)
+	}
 }
 
 // scanTranscript reads a transcript once and pulls the first cwd, the last
-// ai-title, the model and git branch, and the latest user prompt + assistant
-// reply (for the preview pane).
+// ai-title, the model and git branch, the latest user prompt + assistant reply
+// (for the preview pane), a sample of user prompts, the newest record
+// timestamp, and whether the session was continued in another one.
 func scanTranscript(path string) transcriptMeta {
 	var tm transcriptMeta
 	f, err := os.Open(path)
@@ -131,20 +165,34 @@ func scanTranscript(path string) transcriptMeta {
 	sc.Buffer(make([]byte, 1024*1024), 32*1024*1024)
 	for sc.Scan() {
 		line := sc.Bytes()
-		if tm.cwd == "" && bytes.Contains(line, []byte(`"cwd"`)) {
+		// One decode for the envelope fields most message records carry. Other
+		// timestamped records (api-request, file-history-snapshot, …) can be
+		// large, so their timestamp is picked out without a full decode.
+		if (tm.cwd == "" && bytes.Contains(line, []byte(`"cwd"`))) || bytes.Contains(line, []byte(`"gitBranch"`)) {
 			var r struct {
-				Cwd string `json:"cwd"`
+				Cwd       string `json:"cwd"`
+				Branch    string `json:"gitBranch"`
+				Timestamp string `json:"timestamp"`
 			}
-			if json.Unmarshal(line, &r) == nil && r.Cwd != "" {
-				tm.cwd = r.Cwd
+			if json.Unmarshal(line, &r) == nil {
+				if tm.cwd == "" && r.Cwd != "" {
+					tm.cwd = r.Cwd
+				}
+				if r.Branch != "" {
+					tm.branch = r.Branch
+				}
+				tm.noteTime(r.Timestamp)
 			}
+		} else {
+			tm.noteTime(rawTimestamp(line))
 		}
-		if bytes.Contains(line, []byte(`"gitBranch"`)) {
+		if bytes.Contains(line, []byte(`"type":"continued-in"`)) {
 			var r struct {
-				Branch string `json:"gitBranch"`
+				Type        string `json:"type"`
+				ContinuedIn string `json:"continuedInSessionId"`
 			}
-			if json.Unmarshal(line, &r) == nil && r.Branch != "" {
-				tm.branch = r.Branch
+			if json.Unmarshal(line, &r) == nil && r.Type == "continued-in" && r.ContinuedIn != "" {
+				tm.continued = true
 			}
 		}
 		if t, ok := scanTitle(line); ok {
@@ -159,6 +207,7 @@ func scanTranscript(path string) transcriptMeta {
 			}
 			if json.Unmarshal(line, &r) == nil && r.LastPrompt != "" {
 				tm.prompt = r.LastPrompt
+				tm.notePrompt(r.LastPrompt)
 			}
 		}
 		if bytes.Contains(line, []byte(`"type":"assistant"`)) {
@@ -168,6 +217,29 @@ func scanTranscript(path string) transcriptMeta {
 		}
 	}
 	return tm
+}
+
+// noteTime advances tm.last to ts (RFC 3339) when it is newer.
+func (tm *transcriptMeta) noteTime(ts string) {
+	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil && t.After(tm.last) {
+		tm.last = t
+	}
+}
+
+// rawTimestamp returns the first "timestamp" string value in a JSONL line
+// without decoding it ("" if none).
+func rawTimestamp(line []byte) string {
+	key := []byte(`"timestamp":"`)
+	i := bytes.Index(line, key)
+	if i < 0 {
+		return ""
+	}
+	v := line[i+len(key):]
+	j := bytes.IndexByte(v, '"')
+	if j < 0 {
+		return ""
+	}
+	return string(v[:j])
 }
 
 // assistantText returns the concatenated text blocks of a non-sidechain

@@ -5,8 +5,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -345,16 +347,21 @@ func TestParseDockerHistory(t *testing.T) {
 	rows := strings.Join([]string{
 		strings.Join([]string{"1700000000", "sid-h", "/workspaces/app", "Add spans", "claude-opus-4-8", "main", "instrument the pipeline"}, us),
 		strings.Join([]string{"1699999999", "sid-live", "/workspaces/app", "Live", "claude-opus-4-8", "main", "x"}, us),
+		// last-record timestamp wins over an mtime bumped by bookkeeping records
+		strings.Join([]string{"1800000000", "sid-ts", "/workspaces/app", "Old", "claude-opus-4-8", "main", "y", "2026-09-01T10:00:00.000Z"}, us),
 	}, "\n")
 	got := parseDockerHistory(rows, "yogi", "cid1", map[string]bool{"sid-live": true})
-	if len(got) != 1 {
-		t.Fatalf("want 1 (live excluded), got %d", len(got))
+	if len(got) != 2 {
+		t.Fatalf("want 2 (live excluded), got %d", len(got))
 	}
 	h := got[0]
 	if h.SessionID != "sid-h" || h.CWD != "/workspaces/app" || h.Title != "Add spans" ||
 		h.Branch != "main" || h.LastPrompt != "instrument the pipeline" ||
 		h.Source != "yogi" || h.Container != "cid1" || h.ModAt.Unix() != 1700000000 {
 		t.Fatalf("wrong: %+v", h)
+	}
+	if want := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC); !got[1].ModAt.Equal(want) {
+		t.Fatalf("ModAt = %v, want record timestamp %v", got[1].ModAt, want)
 	}
 }
 
@@ -442,5 +449,25 @@ func TestScrollKeepsCursorVisibleNoOverflow(t *testing.T) {
 		if m.top != 0 {
 			t.Fatalf("@h=%d scrolled-up view should have top=0, got %d", m.height, m.top)
 		}
+	}
+}
+
+func TestSortPreference(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if got := parseSort(loadConfig().Sort); got != sortRecent {
+		t.Fatalf("default sort = %v, want recent", got)
+	}
+	model{sort: sortAlpha, notify: true}.savePrefs()
+	c := loadConfig()
+	if parseSort(c.Sort) != sortAlpha || !c.Notify {
+		t.Fatalf("saved prefs not restored: %+v", c)
+	}
+
+	// A config saved before sort was remembered falls back to recent.
+	if err := os.WriteFile(configPath(), []byte(`{"notify":false,"preview":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c := loadConfig(); parseSort(c.Sort) != sortRecent || c.Notify || !c.Preview {
+		t.Fatalf("legacy config: %+v", c)
 	}
 }
