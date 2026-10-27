@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/atarnvik/ccradar/compare/v0.7.0...v0.8.0) (2026-10-27)
+
+
+### Features
+
+* find sessions by description, recent-first sort, current transcript format fixes ([#6](https://github.com/atarnvik/ccradar/issues/6)) ([e03ca72](https://github.com/atarnvik/ccradar/commit/e03ca72955c817e7be5fdb0075d05fcbae182824))
+
 ## [0.7.0](https://github.com/atarnvik/ccradar/compare/v0.6.0...v0.7.0) (2026-07-23)
 
 
