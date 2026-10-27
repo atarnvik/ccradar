@@ -21,6 +21,7 @@ type HistEntry struct {
 	Branch     string    // git branch from the transcript
 	LastPrompt string    // most recent user prompt (for the preview pane)
 	LastReply  string    // most recent assistant text (for the preview pane)
+	Prompts    []string  // a sample of user prompts, first and latest (for the finder)
 	ModAt      time.Time // last activity: newest record timestamp (file mtime as fallback)
 	Source     string    // source label ("" = local; else a --docker container)
 	Container  string    // resolved docker container id ("" = local)
@@ -107,7 +108,8 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 		}
 		out = append(out, HistEntry{
 			SessionID: sid, CWD: tm.cwd, Title: tm.title, Model: tm.model,
-			Branch: tm.branch, LastPrompt: tm.prompt, LastReply: tm.reply, ModAt: modAt,
+			Branch: tm.branch, LastPrompt: tm.prompt, LastReply: tm.reply,
+			Prompts: tm.prompts, ModAt: modAt,
 		})
 	}
 
@@ -124,14 +126,33 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 // transcriptMeta is everything we extract from one transcript in a single pass.
 type transcriptMeta struct {
 	cwd, title, model, branch, prompt, reply string
+	prompts                                  []string  // distinct user prompts: the first few and the latest few
 	last                                     time.Time // newest top-level record timestamp
 	continued                                bool      // a continued-in record: this session was forked into another
 }
 
+// How many of a session's opening and latest prompts transcriptMeta keeps.
+const (
+	promptsKeepFirst = 2
+	promptsKeepLast  = 4
+)
+
+// notePrompt records a user prompt, skipping a repeat of the previous one and
+// dropping middle prompts once more than first+last are held.
+func (tm *transcriptMeta) notePrompt(p string) {
+	if n := len(tm.prompts); n > 0 && tm.prompts[n-1] == p {
+		return
+	}
+	tm.prompts = append(tm.prompts, p)
+	if len(tm.prompts) > promptsKeepFirst+promptsKeepLast {
+		tm.prompts = append(tm.prompts[:promptsKeepFirst], tm.prompts[promptsKeepFirst+1:]...)
+	}
+}
+
 // scanTranscript reads a transcript once and pulls the first cwd, the last
 // ai-title, the model and git branch, the latest user prompt + assistant reply
-// (for the preview pane), the newest record timestamp, and whether the session
-// was continued in another one.
+// (for the preview pane), a sample of user prompts, the newest record
+// timestamp, and whether the session was continued in another one.
 func scanTranscript(path string) transcriptMeta {
 	var tm transcriptMeta
 	f, err := os.Open(path)
@@ -186,6 +207,7 @@ func scanTranscript(path string) transcriptMeta {
 			}
 			if json.Unmarshal(line, &r) == nil && r.LastPrompt != "" {
 				tm.prompt = r.LastPrompt
+				tm.notePrompt(r.LastPrompt)
 			}
 		}
 		if bytes.Contains(line, []byte(`"type":"assistant"`)) {

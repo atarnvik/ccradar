@@ -34,6 +34,13 @@ data and drives your terminal through its AppleScript API. No daemon, no network
 - **Fuzzy search** (`/`) across directory + session title, and a **sort toggle**
   (`s`) between last-active (the default) and alphabetical; the choice is
   remembered.
+- **Find a session from a loose description** (`?`): describe it the way you
+  remember it ("the one where the evals broke on social tools") and Claude picks
+  the matching past sessions, best first, each with a one-line reason. It sends
+  only a compact catalog of recent sessions (directory, age, branch, title, a few
+  of your prompts) — never full transcripts — to a fast model (`haiku`; override
+  with `CCRADAR_FIND_MODEL`) via headless `claude -p`, so it uses your existing
+  Claude Code login. Each lookup takes a few seconds and isn't saved to history.
 - Each row shows the **model** in use; live auto-refresh, status/age at a glance,
   directory grouping.
 - **Update check** — on launch ccradar checks GitHub for the latest release and,
@@ -77,7 +84,8 @@ go build -o ccradar . && ./ccradar
 - **macOS** with a supported terminal: **[Ghostty](https://ghostty.org)** (tested
   on 1.3.1), **iTerm2**, or **Terminal.app**. The terminal is auto-detected from
   `$TERM_PROGRAM`; override with `CCRADAR_TERM=ghostty|iterm|terminal`.
-- **[Claude Code](https://claude.com/claude-code)** CLI (`claude`) for resume.
+- **[Claude Code](https://claude.com/claude-code)** CLI (`claude`) for resume and
+  the `?` finder.
 - **Go** 1.24+ to install/build.
 - First run triggers a one-time macOS **Automation** permission prompt — allow
   your terminal to control the terminal app. The first notification may likewise prompt to
@@ -98,6 +106,7 @@ go build -o ccradar . && ./ccradar
 | `tab` (or `1`/`2`) | switch Active / Historical |
 | `enter` | Active: focus tab · Historical: resume in a new tab |
 | `/` | fuzzy search (directory + title); `enter` keep, `esc` clear |
+| `?` | find a past session by description (asks Claude); `esc` back to the full list |
 | `s` | toggle sort: last-active (default) ↔ alphabetical (remembered across runs) |
 | `p` | toggle the preview pane |
 | `n` | toggle busy→idle notifications (remembered across runs) |

@@ -76,6 +76,11 @@ type model struct {
 	sort       sortMode
 	searching  bool   // editing the search query
 	query      string // active fuzzy filter ("" = no filter)
+	finding    bool   // editing the finder (?) description
+	findQuery  string // description sent to Claude
+	findSeq    int    // bumped per ask (and on cancel) so stale replies are dropped
+	findBusy   bool   // waiting on Claude
+	findHits   map[string]findHit // session id → rank/reason; nil = no finder filter
 	notify     bool   // send a notification on busy→idle
 	preview    bool   // show the right-hand preview pane
 	latestVer  string // newer available version ("" = up to date / unknown)
@@ -241,6 +246,30 @@ func (m *model) rebuild() {
 				rows = append(rows, row{kind: rowDivider, header: "detached · no matching tab"})
 				dirGroupSessions(detached)
 			}
+		}
+	} else if m.findHits != nil {
+		// Finder results: best match first, with a directory header whenever the
+		// directory changes (rank order beats grouping here).
+		var hits []HistEntry
+		for _, h := range m.history {
+			if _, ok := m.findHits[h.SessionID]; ok && fuzzyMatch(m.query, histHay(h)) {
+				hits = append(hits, h)
+			}
+		}
+		sort.SliceStable(hits, func(i, j int) bool {
+			return m.findHits[hits[i].SessionID].rank < m.findHits[hits[j].SessionID].rank
+		})
+		prev := ""
+		for _, h := range hits {
+			hdr := dirDisplay(h.CWD)
+			if h.Source != "" {
+				hdr = sectionLabel(h.Source) + "  " + hdr
+			}
+			if hdr != prev {
+				prev = hdr
+				rows = append(rows, row{kind: rowHeader, header: hdr})
+			}
+			rows = append(rows, row{kind: rowHist, hist: h})
 		}
 	} else {
 		m.sortHistory(m.history)
@@ -574,6 +603,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewHistory {
 			m.rebuild()
 		}
+	case findMsg:
+		if msg.seq != m.findSeq {
+			return m, nil // superseded or cancelled
+		}
+		m.findBusy = false
+		if msg.err != nil {
+			m.flash = "find failed: " + msg.err.Error()
+			return m, nil
+		}
+		m.findHits = msg.hits
+		m.cursor, m.top = 0, 0
+		m.rebuild()
+		if len(msg.hits) == 0 {
+			m.flash = "Claude found no matching session · esc for the full list"
+		}
 	case updateMsg:
 		if v := string(msg); v != "" {
 			m.latestVer = v
@@ -581,6 +625,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flash = "update " + v + " available — " + upgradeHint()
 		}
 	case tea.KeyMsg:
+		if m.finding {
+			return m.handleFindKey(msg)
+		}
 		if m.searching {
 			return m.handleSearchKey(msg)
 		}
@@ -591,7 +638,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "esc":
-			if m.query != "" { // first esc clears an active filter
+			if m.findBusy || m.findHits != nil { // first esc drops the finder
+				m.clearFind()
+				m.flash = ""
+				return m, nil
+			}
+			if m.query != "" { // then an active filter
 				m.query = ""
 				m.cursor, m.top = 0, 0
 				m.rebuild()
@@ -603,6 +655,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.searching = true
 			m.pendingKill = 0
 			m.flash = ""
+		case "?":
+			m.finding = true
+			m.pendingKill = 0
+			m.flash = ""
+			if m.view != viewHistory {
+				return m.switchView("2")
+			}
 		case "up", "k":
 			m.move(-1)
 		case "down", "j":
@@ -684,6 +743,46 @@ func (m model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.cursor, m.top = 0, 0
 	m.rebuild()
 	return m, nil
+}
+
+// handleFindKey processes keys while the finder description is being typed.
+// Nothing is sent until enter.
+func (m model) handleFindKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEnter:
+		m.finding = false
+		q := strings.TrimSpace(m.findQuery)
+		if q == "" {
+			return m, nil
+		}
+		m.findSeq++
+		m.findBusy = true
+		return m, findCmd(m.findSeq, q, append([]HistEntry(nil), m.history...))
+	case tea.KeyEsc:
+		m.finding = false
+	case tea.KeyBackspace, tea.KeyDelete:
+		if r := []rune(m.findQuery); len(r) > 0 {
+			m.findQuery = string(r[:len(r)-1])
+		}
+	case tea.KeyCtrlU:
+		m.findQuery = ""
+	case tea.KeySpace:
+		m.findQuery += " "
+	case tea.KeyRunes:
+		m.findQuery += string(msg.Runes)
+	}
+	return m, nil
+}
+
+// clearFind drops finder results and ignores any reply still in flight.
+func (m *model) clearFind() {
+	m.findSeq++
+	m.findBusy = false
+	m.findHits = nil
+	m.cursor, m.top = 0, 0
+	m.rebuild()
 }
 
 func (m model) switchView(key string) (tea.Model, tea.Cmd) {
@@ -868,11 +967,16 @@ func (m model) View() string {
 		b.WriteString("  " + styUpdate.Render("⬆ "+m.latestVer))
 	}
 	b.WriteString("\n")
-	// Second line is either the search bar (when filtering) or a blank spacer,
+	// Second line is the search or finder bar (when active) or a blank spacer,
 	// so the fixed line count stays the same.
-	if m.searching || m.query != "" {
+	switch {
+	case m.searching:
 		b.WriteString(m.searchLine() + "\n")
-	} else {
+	case m.view == viewHistory && (m.finding || m.findBusy || m.findHits != nil):
+		b.WriteString(m.findLine() + "\n")
+	case m.query != "":
+		b.WriteString(m.searchLine() + "\n")
+	default:
 		b.WriteString("\n")
 	}
 
@@ -904,6 +1008,9 @@ func (m model) View() string {
 		if m.query != "" {
 			msg = "no matches for “" + m.query + "”"
 		}
+		if m.view == viewHistory && m.findHits != nil {
+			msg = "no sessions matched “" + m.findQuery + "”"
+		}
 		b.WriteString(styDim.Render("  "+msg) + "\n")
 	}
 
@@ -914,7 +1021,7 @@ func (m model) View() string {
 	}
 
 	// Right preview rail when enabled and the terminal is wide enough.
-	showRail := m.preview && len(m.rows) > 0 && m.width >= 100
+	showRail := m.showRail()
 	cw := m.width
 	railW := 0
 	if showRail {
@@ -951,7 +1058,9 @@ func (m model) View() string {
 		b.WriteString(styStatus.Render(trunc("  "+m.flash, m.width)) + "\n")
 	}
 	var help string
-	if m.searching {
+	if m.finding {
+		help = "  describe the session you're looking for · enter ask Claude · esc cancel"
+	} else if m.searching {
 		help = "  type to filter · enter accept · esc clear · ↑/↓ move"
 	} else {
 		help = "  ↑/↓ move · tab switch view · enter "
@@ -960,7 +1069,7 @@ func (m model) View() string {
 		} else {
 			help += "resume (new tab) · c copy cmd"
 		}
-		help += " · / search · s sort:" + m.sortLabel() + " · p preview:" + onOff(m.preview) + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
+		help += " · / search · ? find · s sort:" + m.sortLabel() + " · p preview:" + onOff(m.preview) + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
 	b.WriteString(styHelp.Render(trunc(help, m.width)))
 	// No trailing newline: a final "\n" would make Bubble Tea count an extra
@@ -1097,6 +1206,11 @@ func (m model) previewLines(w, h int) []string {
 			line2 += " · " + age
 		}
 		push(line2, styDim)
+		if why := m.selectedWhy(); why != "" {
+			segs = append(segs, seg{"", styDim})
+			push("▸ Match", styPrevLbl)
+			push(why, styPrevBody)
+		}
 		if prompt != "" {
 			segs = append(segs, seg{"", styDim})
 			push("▸ You", styPrevLbl)
@@ -1170,6 +1284,46 @@ func (m model) searchLine() string {
 	}
 	return stySearch.Render("  /"+m.query+cursor) +
 		styHelp.Render(fmt.Sprintf("   %d %s", n, unit))
+}
+
+// showRail reports whether the preview pane fits and is enabled.
+func (m model) showRail() bool { return m.preview && len(m.rows) > 0 && m.width >= 100 }
+
+// selectedWhy is the finder's reason for the selected row ("" outside results).
+func (m model) selectedWhy() string {
+	if m.findHits == nil || m.cursor >= len(m.rows) || m.rows[m.cursor].kind != rowHist {
+		return ""
+	}
+	return m.findHits[m.rows[m.cursor].hist.SessionID].why
+}
+
+// findLine renders the finder bar: the description, then progress, or the
+// match count plus (when the preview pane is hidden) the selected row's reason.
+func (m model) findLine() string {
+	if m.finding {
+		return stySearch.Render("  ? " + m.findQuery + "▌")
+	}
+	// Once sent, shorten a long description so the status and reason fit.
+	q := "  ? " + m.findQuery
+	if limit := m.width / 3; m.width > 0 && len([]rune(m.findQuery)) > limit {
+		q = "  ? " + trunc(m.findQuery, limit-1) + "…"
+	}
+	if m.findBusy {
+		return stySearch.Render(q) + styHelp.Render("   asking Claude ("+findModel()+")…")
+	}
+	n := m.matchCount()
+	unit := "matches"
+	if n == 1 {
+		unit = "match"
+	}
+	info := fmt.Sprintf("   %d %s · esc for all", n, unit)
+	if why := m.selectedWhy(); why != "" && !m.showRail() {
+		info += " · " + why
+	}
+	if m.width > 0 {
+		info = trunc(info, m.width-len([]rune(q)))
+	}
+	return stySearch.Render(q) + styHelp.Render(info)
 }
 
 // ---- entry ----

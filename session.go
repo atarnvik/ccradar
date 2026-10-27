@@ -74,12 +74,18 @@ func underFilter(cwd string) bool {
 }
 
 type regFile struct {
-	PID       int    `json:"pid"`
-	SessionID string `json:"sessionId"`
-	CWD       string `json:"cwd"`
-	Status    string `json:"status"`
-	UpdatedAt int64  `json:"updatedAt"`
+	PID        int    `json:"pid"`
+	SessionID  string `json:"sessionId"`
+	CWD        string `json:"cwd"`
+	Status     string `json:"status"`
+	UpdatedAt  int64  `json:"updatedAt"`
+	Entrypoint string `json:"entrypoint"`
 }
+
+// headlessEntrypoint marks a `claude -p` / Agent SDK run. These register like
+// interactive sessions while they run, but have no tab to focus and nothing to
+// resume (ccradar's own finder is one).
+const headlessEntrypoint = "sdk-cli"
 
 // pidAlive reports whether the process exists (EPERM still means it's there).
 func pidAlive(pid int) bool {
@@ -172,7 +178,7 @@ func localSessions() []Session {
 			continue
 		}
 		var rf regFile
-		if json.Unmarshal(b, &rf) != nil || rf.PID == 0 {
+		if json.Unmarshal(b, &rf) != nil || rf.PID == 0 || rf.Entrypoint == headlessEntrypoint {
 			continue
 		}
 		if !underFilter(rf.CWD) {
