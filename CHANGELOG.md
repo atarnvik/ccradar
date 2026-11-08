@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/atarnvik/ccradar/compare/v0.8.0...v0.9.0) (2026-11-08)
+
+
+### Features
+
+* support Rex terminal ([#8](https://github.com/atarnvik/ccradar/issues/8)) ([ec8df04](https://github.com/atarnvik/ccradar/commit/ec8df041f2c4323693b1d148f74186a160ee077d))
+
 ## [0.8.0](https://github.com/atarnvik/ccradar/compare/v0.7.0...v0.8.0) (2026-10-27)
 
 
