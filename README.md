@@ -1,7 +1,7 @@
 # ccradar
 
 A terminal dashboard to find, switch to, and resume your **Claude Code** sessions
-across **Ghostty**, **iTerm2**, and **Terminal.app** tabs.
+across **Ghostty**, **iTerm2**, **Terminal.app**, and **Rex** tabs.
 
 If you run lots of Claude Code sessions in different tabs/projects, `ccradar` gives
 you one screen to see them all, jump straight to the right native tab, and bring
@@ -12,8 +12,8 @@ data and drives your terminal through its AppleScript API. No daemon, no network
 
 ## Features
 
-- **Works with Ghostty, iTerm2, and Terminal.app** — auto-detected from
-  `$TERM_PROGRAM`. iTerm2/Terminal match sessions to tabs *exactly* by tty;
+- **Works with Ghostty, iTerm2, Terminal.app, and Rex** — auto-detected from
+  `$TERM_PROGRAM`. iTerm2/Terminal/Rex match sessions to tabs *exactly* by tty;
   Ghostty matches by directory + title (and upgrades to tty on versions newer
   than 1.3.1).
 - **Active view** — every live session, grouped by directory. `enter` focuses its
@@ -82,8 +82,8 @@ go build -o ccradar . && ./ccradar
 ## Requirements
 
 - **macOS** with a supported terminal: **[Ghostty](https://ghostty.org)** (tested
-  on 1.3.1), **iTerm2**, or **Terminal.app**. The terminal is auto-detected from
-  `$TERM_PROGRAM`; override with `CCRADAR_TERM=ghostty|iterm|terminal`.
+  on 1.3.1), **iTerm2**, **Terminal.app**, or **[Rex](https://www.superlogical.com/rex)**. The terminal is auto-detected from
+  `$TERM_PROGRAM`; override with `CCRADAR_TERM=ghostty|iterm|terminal|rex`.
 - **[Claude Code](https://claude.com/claude-code)** CLI (`claude`) for resume and
   the `?` finder.
 - **Go** 1.24+ to install/build.
@@ -123,13 +123,17 @@ go build -o ccradar . && ./ccradar
 | `ps -o tty=` | the session process's controlling tty |
 | `osascript` → your terminal | enumerate surfaces, focus / open tabs |
 
-Each terminal has a small driver (`ghostty.go`, `iterm.go`, `terminal.go`) behind
+Each terminal has a small driver (`ghostty.go`, `iterm.go`, `terminal.go`, `rex.go`) behind
 a common interface. A session is paired to a surface **exactly by tty** on
 iTerm2/Terminal.app (`ps` gives the pid's tty; the terminal reports each
 tab/session's tty). On Ghostty 1.3.1, which doesn't expose a tty, it falls back
 to **directory + title** — and upgrades to tty automatically on newer Ghostty.
-`focus` brings the matched tab/pane to the front; resume opens a new tab (iTerm/
-Ghostty) or window (Terminal.app) running `claude --resume`.
+Rex is driven through its `rex` CLI instead of AppleScript: one `rex do` script
+lists every pane in every Rex session with its shell pid, so matching is exact by
+tty even for sessions no window is showing.
+`focus` brings the matched tab/pane to the front (on Rex, switching the app to its
+session); resume opens a new tab (iTerm/Ghostty/Rex) or window (Terminal.app)
+running `claude --resume`.
 
 Sessions are classified by tab reachability: **open** (focusable), **detached**
 (live but no tab), **historical** (no process). Heartbeat isn't used for liveness —

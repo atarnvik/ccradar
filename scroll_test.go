@@ -235,6 +235,10 @@ func TestDetectDriver(t *testing.T) {
 	if d := detectDriver(); d.Name() != "ghostty" {
 		t.Fatalf("ghostty → %s", d.Name())
 	}
+	t.Setenv("TERM_PROGRAM", "rex")
+	if d := detectDriver(); d.Name() != "rex" {
+		t.Fatalf("rex → %s", d.Name())
+	}
 	t.Setenv("CCRADAR_TERM", "terminal") // override wins
 	t.Setenv("TERM_PROGRAM", "ghostty")
 	if d := detectDriver(); d.Name() != "terminal" {

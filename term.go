@@ -53,6 +53,8 @@ func detectDriver() TermDriver {
 		return itermDriver{}
 	case "terminal", "apple_terminal":
 		return terminalDriver{}
+	case "rex":
+		return rexDriver{}
 	default:
 		return ghosttyDriver{}
 	}
