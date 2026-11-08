@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/atarnvik/ccradar/compare/v0.9.0...v0.10.0) (2026-11-08)
+
+
+### Features
+
+* --popup mode that quits after jumping to a session ([#10](https://github.com/atarnvik/ccradar/issues/10)) ([95b7c6a](https://github.com/atarnvik/ccradar/commit/95b7c6ac2869e2cda7adaea0139916aed0cf0261))
+
 ## [0.9.0](https://github.com/atarnvik/ccradar/compare/v0.8.0...v0.9.0) (2026-11-08)
 
 
