@@ -697,7 +697,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, loadHistCmd(activeSessionIDs(m.sessions))
 		case "enter":
-			m.activate()
+			if m.activate() && popupMode {
+				return m, tea.Quit
+			}
 		case "c":
 			m.copyResume()
 		case "x":
@@ -814,9 +816,11 @@ func (m model) switchView(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) activate() {
+// activate focuses or resumes the selected row, and reports whether it took the
+// user somewhere (so --popup can close).
+func (m *model) activate() bool {
 	if m.cursor >= len(m.rows) {
-		return
+		return false
 	}
 	r := m.rows[m.cursor]
 	switch r.kind {
@@ -824,17 +828,22 @@ func (m *model) activate() {
 		s := r.session
 		switch {
 		case s.SurfaceID != "":
-			_ = activeDriver().Focus(s.SurfaceID)
+			if err := activeDriver().Focus(s.SurfaceID); err != nil {
+				m.flash = "couldn't focus tab: " + err.Error()
+				return false
+			}
 			m.flash = "→ focused " + filepath.Base(s.CWD)
+			return true
 		case s.remote():
 			// live container session with no matched host tab → open one exec'd in
 			cwd, cmd := resumeInvocation(s.CWD, s.Container, s.Source, s.SessionID)
 			if err := activeDriver().OpenResume(cwd, cmd); err != nil {
 				_ = copyToClipboard(resumeClipboard(s.CWD, s.Container, s.Source, s.SessionID))
 				m.flash = "couldn't open tab — command copied"
-			} else {
-				m.flash = "↻ opening " + filepath.Base(s.CWD) + " (" + s.Source + ")"
+				return false
 			}
+			m.flash = "↻ opening " + filepath.Base(s.CWD) + " (" + s.Source + ")"
+			return true
 		default:
 			m.flash = fmt.Sprintf("detached (pid %d) — no tab to focus; press x to kill", s.PID)
 		}
@@ -844,10 +853,12 @@ func (m *model) activate() {
 		if err := activeDriver().OpenResume(cwd, cmd); err != nil {
 			_ = copyToClipboard(resumeClipboard(h.CWD, h.Container, h.Source, h.SessionID))
 			m.flash = "couldn't open tab — resume command copied to clipboard"
-		} else {
-			m.flash = "↻ resuming " + filepath.Base(h.CWD) + " in a new tab"
+			return false
 		}
+		m.flash = "↻ resuming " + filepath.Base(h.CWD) + " in a new tab"
+		return true
 	}
+	return false
 }
 
 func (m *model) killSelected() {
@@ -1328,6 +1339,10 @@ func (m model) findLine() string {
 
 // ---- entry ----
 
+// popupMode (--popup) quits after enter takes the user to a session, for running
+// ccradar as a throwaway picker, e.g. in a floating pane bound to a hotkey.
+var popupMode bool
+
 func main() {
 	// Headless: focus a session's tab by id (used by notification click-through).
 	if len(os.Args) > 2 && os.Args[1] == "focus" {
@@ -1346,6 +1361,8 @@ func main() {
 		case "-v", "--version", "version":
 			fmt.Println(displayVersion())
 			return
+		case "--popup":
+			popupMode = true
 		case "--docker":
 			if i+1 < len(args) {
 				extraSources = append(extraSources, parseDockerSource(args[i+1]))
@@ -1365,6 +1382,9 @@ func main() {
 		return
 	}
 	cfg := loadConfig()
+	if popupMode {
+		cfg.Notify = false // a short-lived popup shouldn't duplicate a long-running ccradar's notifications
+	}
 	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort)}, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -1379,9 +1399,10 @@ Usage:
   ccradar --docker <c>  also read sessions from a container (name or compose service;
                         repeatable; --docker <c>=/path to override ~/.claude)
   ccradar               show all local sessions
+  ccradar --popup       quit after enter jumps to or resumes a session (for hotkey popups)
 
-Terminal: auto-detected from $TERM_PROGRAM (Ghostty, iTerm2, Terminal.app).
-Override with CCRADAR_TERM=ghostty|iterm|terminal.
+Terminal: auto-detected from $TERM_PROGRAM (Ghostty, iTerm2, Terminal.app, Rex).
+Override with CCRADAR_TERM=ghostty|iterm|terminal|rex.
 
 Keys: ↑/↓ move · tab switch view · / search · s sort · n notify · enter focus/resume · q quit`)
 }
