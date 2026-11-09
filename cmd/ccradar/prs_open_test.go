@@ -38,7 +38,7 @@ func prModel(states ...string) model {
 		st[u] = prInfo{State: s, Title: "pr " + strconv.Itoa(i+1)}
 	}
 	m := model{width: 120, height: 20, view: viewHistory, prStatus: st}
-	m.history = []HistEntry{{SessionID: "s", CWD: "/w", Title: "Social topics", ModAt: time.Now(), sessionDetails: d}}
+	m.history = []HistEntry{{SessionID: "s", CWD: "/w", Title: "Search tweaks", ModAt: time.Now(), sessionDetails: d}}
 	m.rebuild()
 	return m
 }
@@ -113,7 +113,7 @@ func TestPRPicker(t *testing.T) {
 		t.Fatalf("picker = %v %+v, want all 3 PRs newest first", m.picking, m.pickPRs)
 	}
 	out := m.View()
-	for _, want := range []string{"PRs · Social topics", "▸ #3 × pr 3", "#2   pr 2", "#1 ⑂ pr 1", "enter open · a open all 3 · esc close"} {
+	for _, want := range []string{"PRs · Search tweaks", "▸ #3 × pr 3", "#2   pr 2", "#1 ⑂ pr 1", "enter open · a open all 3 · esc close"} {
 		if !strings.Contains(stripStyles(out), want) {
 			t.Errorf("picker view missing %q:\n%s", want, stripStyles(out))
 		}

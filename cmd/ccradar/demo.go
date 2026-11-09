@@ -79,7 +79,7 @@ func demoSessions() []Session {
 		return Session{
 			PID: 5000, SessionID: "demo-c-" + title, CWD: cwd, Status: status,
 			UpdatedAt: now - age, Title: title, Model: model, Branch: branch,
-			LastPrompt: prompt, Source: "yogi-devcontainer", Container: "demo", SurfaceID: "demo",
+			LastPrompt: prompt, Source: "api-devcontainer", Container: "demo", SurfaceID: "demo",
 		}
 	}
 	local = append(local,
@@ -125,7 +125,7 @@ func demoHistory() []HistEntry {
 		HistEntry{
 			SessionID: "demo-c-hist", CWD: "/workspaces/orders-svc", Title: "Add OpenTelemetry spans",
 			Model: "claude-opus-4-8", Branch: "main", LastPrompt: "instrument the order pipeline with otel spans",
-			ModAt: now.Add(-7 * time.Hour), Source: "yogi-devcontainer", Container: "demo",
+			ModAt: now.Add(-7 * time.Hour), Source: "api-devcontainer", Container: "demo",
 		},
 	)
 	return list
