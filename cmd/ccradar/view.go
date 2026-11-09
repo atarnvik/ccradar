@@ -91,6 +91,9 @@ func (m model) View() string {
 	if n := m.waitingCount(); n > 0 {
 		b.WriteString("  " + styWait.Render(fmt.Sprintf("◆ %d waiting", n)))
 	}
+	if n := len(m.wtStale); n > 0 {
+		b.WriteString("  " + styDim.Render(fmt.Sprintf("⎇ %d stale (W)", n)))
+	}
 	b.WriteString("  " + styDim.Render("via "+activeDriver().Name()))
 	if dirFilter != "" {
 		b.WriteString(styDim.Render("  ⌂ " + dirDisplay(dirFilter)))
@@ -116,7 +119,7 @@ func (m model) View() string {
 
 	// Sticky line: when scrolled, show the directory header that governs the
 	// first visible row (context) plus how many rows are hidden above.
-	if m.top > 0 && !m.picking {
+	if m.top > 0 && !m.picking && !m.wtPicking {
 		sticky := -1
 		for j := m.top - 1; j >= 0; j-- {
 			if m.rows[j].kind == rowHeader {
@@ -171,6 +174,8 @@ func (m model) View() string {
 	lines := make([]string, 0, v)
 	if m.picking {
 		lines = m.pickerLines(cw, v)
+	} else if m.wtPicking {
+		lines = m.wtPickerLines(cw, v)
 	} else {
 		for i := m.top; i < end; i++ {
 			lines = append(lines, m.renderListLine(i, cw))
@@ -192,7 +197,7 @@ func (m model) View() string {
 		}
 	}
 
-	if end < len(m.rows) && !m.picking {
+	if end < len(m.rows) && !m.picking && !m.wtPicking {
 		b.WriteString(styHelp.Render(fmt.Sprintf("  ↓ %d more", len(m.rows)-end)) + "\n")
 	} else {
 		b.WriteString("\n")
@@ -203,6 +208,8 @@ func (m model) View() string {
 	var help string
 	if m.picking {
 		help = fmt.Sprintf("  ↑/↓ move · enter open · a open all %d · esc close", len(m.pickPRs))
+	} else if m.wtPicking {
+		help = fmt.Sprintf("  ↑/↓ move · enter remove · a remove all %d · esc close", len(m.wtStale))
 	} else if m.finding {
 		help = "  describe the session you're looking for · enter ask Claude · esc cancel"
 	} else if m.searching {
@@ -259,6 +266,11 @@ func (m model) renderListLine(i, cw int) string {
 		}
 		return stySection.Render(truncPad(s, cw))
 	case rowHeader:
+		if _, ok := m.staleIn(r.dir); ok {
+			const tag = "  ⑂ PRs done · W"
+			h := truncEllipsis(r.header, max(cw-len([]rune(tag)), 1))
+			return padVis(styHeader.Render(h)+styDim.Render(tag), len([]rune(h+tag)), cw)
+		}
 		return styHeader.Render(truncPad(truncEllipsis(r.header, cw), cw))
 	case rowDivider:
 		return styHelp.Render(truncPad("  ── "+r.header+" ──", cw))

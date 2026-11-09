@@ -40,7 +40,7 @@ func (m *model) rebuild() {
 		for _, s := range ss {
 			if s.CWD != prev {
 				prev = s.CWD
-				rows = append(rows, row{kind: rowHeader, header: headerDir(s.CWD)})
+				rows = append(rows, row{kind: rowHeader, header: headerDir(s.CWD), dir: s.CWD})
 			}
 			rows = append(rows, row{kind: rowSession, session: s})
 		}
@@ -94,7 +94,7 @@ func (m *model) rebuild() {
 			}
 			if hdr != prev {
 				prev = hdr
-				rows = append(rows, row{kind: rowHeader, header: hdr})
+				rows = append(rows, row{kind: rowHeader, header: hdr, dir: h.CWD})
 			}
 			rows = append(rows, row{kind: rowHist, hist: h})
 		}
@@ -115,7 +115,7 @@ func (m *model) rebuild() {
 				any = true
 				if h.CWD != prev {
 					prev = h.CWD
-					rows = append(rows, row{kind: rowHeader, header: headerDir(h.CWD)})
+					rows = append(rows, row{kind: rowHeader, header: headerDir(h.CWD), dir: h.CWD})
 				}
 				rows = append(rows, row{kind: rowHist, hist: h})
 			}

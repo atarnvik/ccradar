@@ -75,6 +75,12 @@ network calls are the update check and PR status lookups through your `gh`.
   out, and the tab bar counts them), the **model** per row, how many tokens
   each live session has in **context** (`412k`, as of its latest turn), and
   directory grouping, with worktrees shown as `repo ⎇ name`.
+- **Stale worktrees** — ccradar looks at the repos your sessions ran in, lists
+  their git worktrees, and asks GitHub (via `gh`) for PRs from each worktree's
+  branch. When they're all merged or closed, the tab bar shows `⎇ N stale (W)`
+  and `W` lists them for removal. Removal is `git worktree remove`: it refuses
+  a worktree with uncommitted changes and keeps the branch. A worktree a live
+  session is working in is never listed.
 - **Update check** — on launch ccradar checks GitHub for the latest release and,
   if newer, shows `⬆ vX.Y.Z` plus the right upgrade command for how you installed
   (`brew upgrade` vs `go install`). Best-effort and disableable with
@@ -144,6 +150,7 @@ go build -o ccradar ./cmd/ccradar && ./ccradar
 | `n` | toggle busy→idle notifications (remembered across runs) |
 | `c` | Historical: copy `cd <dir> && claude --resume <id>` to clipboard |
 | `x` | Active: kill a detached (no-tab) session (press twice to confirm) |
+| `W` | list stale worktrees (every PR for the branch merged or closed); `enter` removes one, `a` all (press twice; uses `git worktree remove`, keeps branches) |
 | `r` | refresh · `q` quit |
 
 ## How it works
