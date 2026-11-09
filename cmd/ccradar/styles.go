@@ -5,10 +5,11 @@ import (
 )
 
 var (
-	styHeader   = lipgloss.NewStyle().Foreground(lipgloss.Color("44")).Bold(true)
+	styHeader   = lipgloss.NewStyle().Foreground(lipgloss.Color("73"))
 	styBusy     = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	styIdle     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	styWait     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	styIdle     = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+	styWait     = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
+	styWorking  = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	styDim      = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	styTitle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	styModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("103"))

@@ -26,6 +26,7 @@ const (
 	rowSection rowKind = iota // a source section header (Local / a container)
 	rowHeader                 // a directory header within a section
 	rowDivider
+	rowBlank                  // spacing between groups
 	rowSession
 	rowHist
 )

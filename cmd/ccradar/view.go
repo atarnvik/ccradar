@@ -8,21 +8,25 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// statusText returns the fixed-width (7-col) status label and its color style.
+// statusWidth is the status column: a glyph, then a word for anything but idle.
+const statusWidth = 6
+
+// statusText returns the fixed-width status label and its color style. Idle is
+// the common case, so it's just a dim glyph; waiting (needs you) stands out.
 func statusText(status string) (string, lipgloss.Style) {
 	switch status {
 	case "busy":
-		return "● busy ", styBusy
+		return "● busy", styWorking
 	case "idle":
-		return "○ idle ", styIdle
+		return "○     ", styIdle
 	case "waiting":
-		return "◆ wait ", styWait
+		return "◆ wait", styWait
 	default:
 		w := status
-		if len(w) > 5 {
-			w = w[:5]
+		if len(w) > 4 {
+			w = w[:4]
 		}
-		return fmt.Sprintf("· %-5s", w), styDim
+		return fmt.Sprintf("· %-4s", w), styDim
 	}
 }
 
@@ -70,9 +74,23 @@ func (m model) tabBar() string {
 	return styTabOff.Render(a) + " " + styTabOn.Render(h)
 }
 
+// waitingCount is how many live sessions are waiting on you.
+func (m model) waitingCount() int {
+	n := 0
+	for _, s := range m.sessions {
+		if s.Status == "waiting" {
+			n++
+		}
+	}
+	return n
+}
+
 func (m model) View() string {
 	var b strings.Builder
 	b.WriteString(m.tabBar())
+	if n := m.waitingCount(); n > 0 {
+		b.WriteString("  " + styWait.Render(fmt.Sprintf("◆ %d waiting", n)))
+	}
 	b.WriteString("  " + styDim.Render("via "+activeDriver().Name()))
 	if dirFilter != "" {
 		b.WriteString(styDim.Render("  ⌂ " + dirDisplay(dirFilter)))
@@ -241,9 +259,11 @@ func (m model) renderListLine(i, cw int) string {
 		}
 		return stySection.Render(truncPad(s, cw))
 	case rowHeader:
-		return styHeader.Render(truncPad(r.header, cw))
+		return styHeader.Render(truncPad(truncEllipsis(r.header, cw), cw))
 	case rowDivider:
 		return styHelp.Render(truncPad("  ── "+r.header+" ──", cw))
+	case rowBlank:
+		return strings.Repeat(" ", max(cw, 0))
 	}
 	plain, colored := m.rowColumns(r, cw)
 	if i == m.cursor {
@@ -259,84 +279,71 @@ const (
 	prColumnMinWidth   = 70
 )
 
-// rowColumns builds the aligned columns for a session/history row. The title
-// column flexes so the plain text is exactly cw-4 cells wide (the 4 is the row's
-// left indent), keeping the highlighted and normal forms identical.
+// rowColumns builds the aligned columns for a session/history row: status
+// and age (live rows) or age (past rows), the title, then the optional columns
+// — cost, PR, background shells — and the model.
+// The title column flexes so the row fills cw-4 cells (the 4 is the row's
+// left indent), keeping the optional columns aligned at the right edge.
 func (m model) rowColumns(r row, cw int) (plain, colored string) {
+	var lead, leadC string // status/age
+	var d sessionDetails
+	var title, mdl string
+	var tail, tailC []string
 	switch r.kind {
 	case rowSession:
 		s := r.session
 		sp, sst := statusText(s.Status)
 		age := fmt.Sprintf("%4s", fmtAge(nowMs()-s.UpdatedAt))
-		showPR := m.anyPR && cw >= prColumnMinWidth
-		tw := cw - 40
-		if showPR {
-			tw -= prColumnWidth + 2
-		}
-		if m.anyShell {
-			tw -= shellColumnWidth + 2
-		}
-		if tw < 8 {
-			tw = 8
-		}
-		titleF := truncPad(displayTitle(s.sessionDetails, s.Title), tw)
-		mdl := truncPad(modelShort(s.Model), 10)
-		pr, prC := "", ""
-		if showPR {
-			pr, prC = prBadge(s.sessionDetails, m.prStatus)
-			pr, prC = pr+"  ", prC+"  "
-		}
-		if m.anyShell {
-			sh := strings.Repeat(" ", shellColumnWidth)
-			if n := len(s.Shells); n > 0 {
-				sh = truncPad(fmt.Sprintf("⚙%d", n), shellColumnWidth)
-			}
-			pr, prC = pr+sh+"  ", prC+styBusy.Render(sh)+"  "
-		}
-		if s.SurfaceID != "" {
-			loc := truncPad("→ tab", 8)
-			plain = fmt.Sprintf("%s %s  %s  %s%s  %s", sp, age, titleF, pr, mdl, loc)
-			colored = fmt.Sprintf("%s %s  %s  %s%s  %s",
-				sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), prC, styModel.Render(mdl), styTab.Render(loc))
-		} else {
-			loc := truncPad(fmt.Sprintf("pid %d", s.PID), 8)
-			plain = fmt.Sprintf("%s %s  %s  %s%s  %s", sp, age, titleF, pr, mdl, loc)
-			colored = styDim.Render(plain) // detached: muted whole row
-		}
+		lead, leadC = sp+" "+age, sst.Render(sp)+" "+styDim.Render(age)
+		d, title, mdl = s.sessionDetails, s.Title, s.Model
 	case rowHist:
 		h := r.hist
 		age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
-		showCost := m.showCost && cw >= costColumnMinWidth
-		showPR := m.anyPR && cw >= prColumnMinWidth
-		tw := cw - 32
-		if showCost {
-			tw -= 7 // "$0.00" + 2 spaces
-		}
-		if showPR {
-			tw -= prColumnWidth + 2
-		}
-		if tw < 8 {
-			tw = 8
-		}
-		titleF := truncPad(displayTitle(h.sessionDetails, h.Title), tw)
-		mdl := truncPad(modelShort(h.Model), 10)
-		resume := truncPad("↻ resume", 8)
-		cost, costC := "", ""
-		if showCost {
+		lead, leadC = age, styDim.Render(age)
+		d, title, mdl = h.sessionDetails, h.Title, h.Model
+		if m.showCost && cw >= costColumnMinWidth {
+			cost := ""
 			if h.Cost.known() {
 				cost = fmtCost(h.Cost.USD)
 			}
 			cost = fmt.Sprintf("%5s", cost)
-			cost, costC = cost+"  ", styDim.Render(cost)+"  "
+			tail, tailC = append(tail, cost), append(tailC, styDim.Render(cost))
 		}
-		pr, prC := "", ""
-		if showPR {
-			pr, prC = prBadge(h.sessionDetails, m.prStatus)
-			pr, prC = pr+"  ", prC+"  "
+	}
+	if m.anyPR && cw >= prColumnMinWidth {
+		p, pc := prBadge(d, m.prStatus)
+		tail, tailC = append(tail, p), append(tailC, pc)
+	}
+	if m.anyShell && r.kind == rowSession {
+		sh := strings.Repeat(" ", shellColumnWidth)
+		if n := len(r.session.Shells); n > 0 {
+			sh = truncPad(fmt.Sprintf("⚙%d", n), shellColumnWidth)
 		}
-		plain = fmt.Sprintf("%s  %s  %s%s%s  %s", age, titleF, cost, pr, mdl, resume)
-		colored = fmt.Sprintf("%s  %s  %s%s%s  %s",
-			styDim.Render(age), styTitle.Render(titleF), costC, prC, styModel.Render(mdl), styTab.Render(resume))
+		tail, tailC = append(tail, sh), append(tailC, styWorking.Render(sh))
+	}
+	ms := truncPad(modelShort(mdl), 10)
+	tail, tailC = append(tail, ms), append(tailC, styModel.Render(ms))
+	detached := r.kind == rowSession && r.session.SurfaceID == ""
+	if detached {
+		pid := fmt.Sprintf("pid %d", r.session.PID)
+		tail, tailC = append(tail, pid), append(tailC, pid)
+	}
+
+	fixed := len([]rune(lead)) + 2
+	for _, t := range tail {
+		fixed += len([]rune(t)) + 2
+	}
+	tw := max(cw-4-fixed, 8)
+	titleF := truncPad(truncEllipsis(displayTitle(d, title), tw), tw)
+
+	plain = lead + "  " + titleF
+	colored = leadC + "  " + styTitle.Render(titleF)
+	for i := range tail {
+		plain += "  " + tail[i]
+		colored += "  " + tailC[i]
+	}
+	if detached {
+		colored = styDim.Render(plain) // detached: muted whole row
 	}
 	return plain, colored
 }

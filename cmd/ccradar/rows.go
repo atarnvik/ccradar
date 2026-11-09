@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,20 @@ func dirDisplay(cwd string) string {
 	return cwd
 }
 
+// worktreeDir matches a git worktree kept inside its repo
+// (<repo>/.worktrees/<name>, or Claude Code's <repo>/.claude/worktrees/<name>).
+var worktreeDir = regexp.MustCompile(`/\.(?:claude/)?worktrees?/`)
+
+// headerDir is a directory header: the path with ~ for home, and a worktree
+// shown as "<repo> ⎇ <name>" rather than its full path.
+func headerDir(cwd string) string {
+	d := dirDisplay(cwd)
+	if loc := worktreeDir.FindStringIndex(d); loc != nil {
+		d = d[:loc[0]] + " ⎇ " + d[loc[1]:]
+	}
+	return d
+}
+
 func (m *model) rebuild() {
 	var rows []row
 
@@ -25,7 +40,7 @@ func (m *model) rebuild() {
 		for _, s := range ss {
 			if s.CWD != prev {
 				prev = s.CWD
-				rows = append(rows, row{kind: rowHeader, header: dirDisplay(s.CWD)})
+				rows = append(rows, row{kind: rowHeader, header: headerDir(s.CWD)})
 			}
 			rows = append(rows, row{kind: rowSession, session: s})
 		}
@@ -73,7 +88,7 @@ func (m *model) rebuild() {
 		})
 		prev := ""
 		for _, h := range hits {
-			hdr := dirDisplay(h.CWD)
+			hdr := headerDir(h.CWD)
 			if h.Source != "" {
 				hdr = sectionLabel(h.Source) + "  " + hdr
 			}
@@ -100,19 +115,32 @@ func (m *model) rebuild() {
 				any = true
 				if h.CWD != prev {
 					prev = h.CWD
-					rows = append(rows, row{kind: rowHeader, header: dirDisplay(h.CWD)})
+					rows = append(rows, row{kind: rowHeader, header: headerDir(h.CWD)})
 				}
 				rows = append(rows, row{kind: rowHist, hist: h})
 			}
 		}
 	}
-	m.rows = rows
+	m.rows = spaceGroups(rows)
 	m.anyPR, m.anyShell = false, false
-	for _, r := range rows {
+	for _, r := range m.rows {
 		m.anyPR = m.anyPR || len(r.details().PRs) > 0
 		m.anyShell = m.anyShell || (r.kind == rowSession && len(r.session.Shells) > 0)
 	}
 	m.clampCursor()
+}
+
+// spaceGroups puts a blank line before each header, section and divider that
+// follows a session row, so groups read as separate blocks.
+func spaceGroups(rows []row) []row {
+	out := make([]row, 0, len(rows)+len(rows)/3)
+	for i, r := range rows {
+		if i > 0 && !selectable(r.kind) && selectable(rows[i-1].kind) {
+			out = append(out, row{kind: rowBlank})
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // sectionLabel names a source section.

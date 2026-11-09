@@ -593,3 +593,40 @@ func TestLoadingStateBeforeFirstLoad(t *testing.T) {
 		t.Errorf("after an empty history load:\n%s", out)
 	}
 }
+
+func TestHeaderDirShortensWorktrees(t *testing.T) {
+	h := homeDir()
+	cases := map[string]string{
+		h + "/dev/app":                         "~/dev/app",
+		h + "/dev/app/.worktrees/fix-login":    "~/dev/app ⎇ fix-login",
+		h + "/dev/app/.claude/worktrees/x/sub": "~/dev/app ⎇ x/sub",
+	}
+	for in, want := range cases {
+		if got := headerDir(in); got != want {
+			t.Errorf("headerDir(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestListDropsRepeatedColumns(t *testing.T) {
+	now := nowMs()
+	m := model{view: viewActive, width: 160, height: 20, sessionsReady: true}
+	m.sessions = []Session{
+		{PID: 1, CWD: "/a", Status: "idle", UpdatedAt: now, Title: "First", Model: "claude-opus-5-5", SurfaceID: "s1"},
+		{PID: 2, CWD: "/a", Status: "waiting", UpdatedAt: now, Title: "Second", Model: "claude-opus-5-5", SurfaceID: "s2"},
+		{PID: 3, CWD: "/b", Status: "idle", UpdatedAt: now, Title: "Third", Model: "claude-opus-5-5", SurfaceID: "s3"},
+	}
+	m.rebuild()
+	v := m.View()
+	for _, gone := range []string{"→ tab", "idle"} {
+		if strings.Contains(v, gone) {
+			t.Errorf("view repeats %q on every row:\n%s", gone, v)
+		}
+	}
+	if !strings.Contains(v, "◆ 1 waiting") || !strings.Contains(v, "◆ wait") {
+		t.Errorf("waiting session not called out:\n%s", v)
+	}
+	if m.rows[3].kind != rowBlank || m.rows[4].kind != rowHeader {
+		t.Errorf("want a blank line before the second group, rows = %+v", m.rows)
+	}
+}

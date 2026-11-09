@@ -363,35 +363,33 @@ const prPreviewMax = 5
 // prOpenConfirmAbove is how many PRs `o` opens without asking first.
 const prOpenConfirmAbove = 5
 
-// prColumnWidth is the badge column: "#12345", a state glyph, and " +N" when
-// the session has more PRs than the one shown.
-const prColumnWidth = 10
+// prColumnWidth is the badge column: a state glyph, "#12345", and " +N" when
+// the session has other PRs.
+const prColumnWidth = 12
 
 // prBadge renders a row's PR column (exactly prColumnWidth cells): the latest
-// PR's number colored by state, its state glyph (see stateGlyph), and how many
-// other PRs the session has.
+// PR's state glyph (see stateGlyph), its number colored by state, and how many
+// other PRs the session has. The glyph comes first so numbers line up.
 func prBadge(d sessionDetails, status map[string]prInfo) (plain, colored string) {
 	l, ok := d.latestPR()
 	if !ok {
 		blank := strings.Repeat(" ", prColumnWidth)
 		return blank, blank
 	}
-	num := truncPad(fmt.Sprintf("#%d", l.Number), 6)
 	info := status[l.URL]
 	glyph, gs := stateGlyph(info)
+	num := fmt.Sprintf("#%d", l.Number)
 	more := morePRs(len(d.PRs) - 1)
-	return num + glyph + more, prStyle(info).Render(num) + gs.Render(glyph) + styDim.Render(more)
+	pad := strings.Repeat(" ", max(prColumnWidth-2-len(num)-len(more), 0))
+	return glyph + " " + num + more + pad, gs.Render(glyph) + " " + prStyle(info).Render(num) + styDim.Render(more) + pad
 }
 
-// morePRs is the badge's 3-cell "other PRs" count: " +2", " 9+" past nine.
+// morePRs is the badge's "other PRs" count: " +2", capped at " +99".
 func morePRs(n int) string {
-	switch {
-	case n <= 0:
-		return "   "
-	case n <= 9:
-		return fmt.Sprintf(" +%d", n)
+	if n <= 0 {
+		return ""
 	}
-	return " 9+"
+	return fmt.Sprintf(" +%d", min(n, 99))
 }
 
 // Glyphs for PRs that are no longer open. ⑂ stands in for GitHub's merge

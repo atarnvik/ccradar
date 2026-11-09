@@ -19,10 +19,10 @@ func TestPRBadgeCountsOtherPRs(t *testing.T) {
 		return d
 	}
 	st := map[string]prInfo{"3": {State: "OPEN", Checks: "SUCCESS"}}
-	if plain, colored := prBadge(prs(3), st); plain != "#5703 ✓ +2" || lipgloss.Width(colored) != prColumnWidth {
+	if plain, colored := prBadge(prs(3), st); plain != "✓ #5703 +2  " || lipgloss.Width(colored) != prColumnWidth {
 		t.Errorf("3 PRs: %q (width %d)", plain, lipgloss.Width(colored))
 	}
-	if plain, _ := prBadge(prs(12), nil); plain != "#5712   9+" {
+	if plain, _ := prBadge(prs(12), nil); plain != "  #5712 +11 " {
 		t.Errorf("12 PRs: %q", plain)
 	}
 }
