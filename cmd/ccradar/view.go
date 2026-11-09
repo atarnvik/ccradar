@@ -281,7 +281,7 @@ const (
 
 // rowColumns builds the aligned columns for a session/history row: status
 // and age (live rows) or age (past rows), the title, then the optional columns
-// — cost, PR, background shells, and the model when it isn't the usual one.
+// — cost, PR, background shells — and the model.
 // The title column flexes so the row fills cw-4 cells (the 4 is the row's
 // left indent), keeping the optional columns aligned at the right edge.
 func (m model) rowColumns(r row, cw int) (plain, colored string) {
@@ -321,14 +321,8 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 		}
 		tail, tailC = append(tail, sh), append(tailC, styWorking.Render(sh))
 	}
-	if m.oddModel {
-		ms := ""
-		if short := modelShort(mdl); short != m.usualModel {
-			ms = short
-		}
-		ms = truncPad(ms, 10)
-		tail, tailC = append(tail, ms), append(tailC, styModel.Render(ms))
-	}
+	ms := truncPad(modelShort(mdl), 10)
+	tail, tailC = append(tail, ms), append(tailC, styModel.Render(ms))
 	detached := r.kind == rowSession && r.session.SurfaceID == ""
 	if detached {
 		pid := fmt.Sprintf("pid %d", r.session.PID)

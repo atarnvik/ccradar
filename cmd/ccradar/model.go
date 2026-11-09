@@ -33,17 +33,6 @@ const (
 
 func selectable(k rowKind) bool { return k == rowSession || k == rowHist }
 
-// model is the row's short model name ("" for non-session rows).
-func (r row) model() string {
-	switch r.kind {
-	case rowSession:
-		return modelShort(r.session.Model)
-	case rowHist:
-		return modelShort(r.hist.Model)
-	}
-	return ""
-}
-
 // details is the row's session details (zero for headers and dividers).
 func (r row) details() sessionDetails {
 	switch r.kind {
@@ -96,8 +85,6 @@ type model struct {
 	prBusy     bool              // a PR status lookup is in flight
 	anyPR      bool              // some row in the current list has a PR (shows the PR column)
 	anyShell   bool              // some live row has background shells (shows the ⚙ column)
-	usualModel string            // the most common model in the list; only others are shown
-	oddModel   bool              // some row's model differs from usualModel (shows the model column)
 	showCost   bool // show past sessions' cost (off by default; $ toggles it)
 	railW      int  // preview rail width the user chose with [ / ] (0 = default)
 }

@@ -613,7 +613,7 @@ func TestListDropsRepeatedColumns(t *testing.T) {
 	}
 	m.rebuild()
 	v := m.View()
-	for _, gone := range []string{"opus-5-5", "→ tab", "idle"} {
+	for _, gone := range []string{"→ tab", "idle"} {
 		if strings.Contains(v, gone) {
 			t.Errorf("view repeats %q on every row:\n%s", gone, v)
 		}
@@ -623,11 +623,5 @@ func TestListDropsRepeatedColumns(t *testing.T) {
 	}
 	if m.rows[3].kind != rowBlank || m.rows[4].kind != rowHeader {
 		t.Errorf("want a blank line before the second group, rows = %+v", m.rows)
-	}
-
-	m.sessions[2].Model = "claude-sonnet-5-5"
-	m.rebuild()
-	if v := m.View(); !strings.Contains(v, "sonnet-5-5") || strings.Contains(v, "opus-5-5") {
-		t.Errorf("only the odd model should show:\n%s", v)
 	}
 }

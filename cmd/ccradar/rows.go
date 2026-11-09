@@ -123,21 +123,10 @@ func (m *model) rebuild() {
 	}
 	m.rows = spaceGroups(rows)
 	m.anyPR, m.anyShell = false, false
-	models := map[string]int{}
 	for _, r := range m.rows {
 		m.anyPR = m.anyPR || len(r.details().PRs) > 0
 		m.anyShell = m.anyShell || (r.kind == rowSession && len(r.session.Shells) > 0)
-		if mdl := r.model(); mdl != "" {
-			models[mdl]++
-		}
 	}
-	m.usualModel, m.oddModel = "", false
-	for mdl, n := range models {
-		if n > models[m.usualModel] || (n == models[m.usualModel] && mdl < m.usualModel) {
-			m.usualModel = mdl
-		}
-	}
-	m.oddModel = len(models) > 1
 	m.clampCursor()
 }
 
