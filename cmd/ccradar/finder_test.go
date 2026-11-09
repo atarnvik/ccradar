@@ -225,3 +225,27 @@ func TestNotePromptSamplesFirstAndLatest(t *testing.T) {
 		t.Fatalf("prompts = %s, want first 2 + last 4, repeats collapsed", got)
 	}
 }
+
+func TestLocalSessionsAgeIsTimeInStatus(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_SESSIONS_DIR", dir)
+	t.Setenv("CLAUDE_PROJECTS_DIR", t.TempDir())
+	t.Setenv("CLAUDE_PROC_MATCH", procComm(os.Getpid()))
+	pid := strconv.Itoa(os.Getpid())
+	for name, times := range map[string]string{
+		"both":   `"updatedAt":999,"statusUpdatedAt":500`, // updatedAt as a heartbeat
+		"legacy": `"updatedAt":700`,                       // older registry without statusUpdatedAt
+	} {
+		reg := `{"pid":` + pid + `,"sessionId":"` + name + `","cwd":"/w","status":"busy","entrypoint":"cli",` + times + `}`
+		if err := os.WriteFile(filepath.Join(dir, name+".json"), []byte(reg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := map[string]int64{}
+	for _, s := range localSessions() {
+		got[s.SessionID] = s.UpdatedAt
+	}
+	if got["both"] != 500 || got["legacy"] != 700 {
+		t.Fatalf("UpdatedAt = %v, want statusUpdatedAt when present, else updatedAt", got)
+	}
+}

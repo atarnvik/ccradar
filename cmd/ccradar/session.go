@@ -80,6 +80,7 @@ type regFile struct {
 	CWD        string `json:"cwd"`
 	Status     string `json:"status"`
 	UpdatedAt  int64  `json:"updatedAt"`
+	StatusAt   int64  `json:"statusUpdatedAt"`
 	Entrypoint string `json:"entrypoint"`
 	Name       string `json:"name"`
 	NameSource string `json:"nameSource"`
@@ -200,6 +201,11 @@ func localSessions() []Session {
 			CWD:       rf.CWD,
 			Status:    rf.Status,
 			UpdatedAt: rf.UpdatedAt,
+		}
+		// Rows show how long a session has been in its status. updatedAt
+		// equals statusUpdatedAt today, but has been a heartbeat before.
+		if rf.StatusAt > 0 {
+			s.UpdatedAt = rf.StatusAt
 		}
 		tm := metaFor(rf.SessionID)
 		s.Title, s.Model, s.Branch = tm.title, tm.model, tm.branch
