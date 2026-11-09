@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -239,7 +240,12 @@ func TestFetchPRsAcrossAccounts(t *testing.T) {
 	_ = os.Remove(logPath)
 	fetchPRs(links[:2])
 	calls, _ = os.ReadFile(logPath)
-	if want := "tok-me me \ntok-work work \n"; string(calls) != want {
-		t.Fatalf("second refresh calls:\n%s\nwant one call per account, no misses:\n%s", calls, want)
+	lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	for i := range lines {
+		lines[i] = strings.TrimSpace(lines[i])
+	}
+	sort.Strings(lines) // the accounts are asked in parallel
+	if got, want := strings.Join(lines, "|"), "tok-me me|tok-work work"; got != want {
+		t.Fatalf("second refresh calls: %s\nwant one call per account, no misses: %s", got, want)
 	}
 }

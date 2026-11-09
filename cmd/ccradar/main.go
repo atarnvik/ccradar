@@ -57,10 +57,15 @@ func main() {
 		cfg.Notify = false // a short-lived popup shouldn't duplicate a long-running ccradar's notifications
 	}
 	m := model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost, railW: cfg.RailW}
-	if demoMode() {
+	switch {
+	case demoMode():
 		m.prStatus = demoPRStatus()
+	case prStatusEnabled():
+		m.prStatus = loadPRCache() // badges at once; stale open PRs refresh in the background
 	}
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	saveScanCache(true)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

@@ -51,6 +51,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for url, info := range msg {
 			m.prStatus[url] = info
 		}
+		return m, savePRCacheCmd(m.prStatus)
 	case findMsg:
 		if msg.seq != m.findSeq {
 			return m, nil // superseded or cancelled

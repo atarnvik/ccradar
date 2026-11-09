@@ -28,6 +28,7 @@ func scanTranscriptCached(path string) transcriptMeta {
 		return scanTranscript(path)
 	}
 	scanCache.Lock()
+	loadScanCacheLocked() // the first lookup pulls in the copy on disk
 	c, ok := scanCache.m[path]
 	scanCache.Unlock()
 	if ok && c.size == fi.Size() && c.mod.Equal(fi.ModTime()) {
@@ -36,6 +37,7 @@ func scanTranscriptCached(path string) transcriptMeta {
 	tm := scanTranscript(path)
 	scanCache.Lock()
 	scanCache.m[path] = cachedScan{size: fi.Size(), mod: fi.ModTime(), tm: tm}
+	scanDisk.dirty = true
 	scanCache.Unlock()
 	return tm
 }
