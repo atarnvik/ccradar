@@ -56,7 +56,7 @@ func TestLoadAgentsEnrichesFromJobAndTranscript(t *testing.T) {
 
 	job := `{"state":"blocked","detail":"PRs ready","needs":"Should I close #5709?","intent":"rebase #5705",
 	 "updatedAt":"2026-10-02T19:02:23.329Z","output":{"result":"Restacked"},
-	 "children":[{"id":"5652","href":"https://github.com/meetyogi/yogi/pull/5652","kind":"pr"},{"id":"x","href":"https://example.com/x","kind":"link"}]}`
+	 "children":[{"id":"5652","href":"https://github.com/acme/app/pull/5652","kind":"pr"},{"id":"x","href":"https://example.com/x","kind":"link"}]}`
 	if err := os.MkdirAll(filepath.Join(dir, "jobs", "aaaa1111"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestLoadAgentsEnrichesFromJobAndTranscript(t *testing.T) {
 	writeTranscript(t, filepath.Join(dir, "projects", "-w-app", "sid-a.jsonl"), time.Now(),
 		`{"type":"user","cwd":"/w/app","gitBranch":"stack","timestamp":"2026-10-02T14:00:00.000Z","message":{"role":"user","content":"go"}}`,
 		`{"type":"assistant","isSidechain":false,"timestamp":"2026-10-02T15:00:00.000Z","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"done"}]}}`,
-		prLine(5652, "meetyogi/yogi"), prLine(5691, "meetyogi/yogi"))
+		prLine(5652, "acme/app"), prLine(5691, "acme/app"))
 
 	as := loadAgents()
 	if len(as) != 3 {

@@ -13,3 +13,4 @@
 
 # local Claude Code state
 .claude/
+/cmd/ccradar/ccradar
