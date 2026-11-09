@@ -179,8 +179,11 @@ func (m model) View() string {
 		} else {
 			help += "resume (new tab) · c copy cmd"
 		}
-		if _, ok := m.selectedDetails().latestPR(); ok {
+		switch n := len(m.selectedDetails().PRs); {
+		case n == 1:
 			help += " · o open PR"
+		case n > 1:
+			help += fmt.Sprintf(" · o open %d PRs", n)
 		}
 		help += " · / search · ? find · s sort:" + m.sortLabel() + " · p preview:" + onOff(m.preview) + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}

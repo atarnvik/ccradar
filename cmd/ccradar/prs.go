@@ -315,24 +315,42 @@ func parsePRResponse(out []byte, aliases map[string]string) map[string]prInfo {
 	return got
 }
 
-// prPreviewMax is how many of a session's latest PRs the preview lists.
-const prPreviewMax = 3
+// prPreviewMax is how many of a session's latest PRs the preview lists (and
+// have their status looked up).
+const prPreviewMax = 5
 
-// prColumnWidth is the badge column: "#12345" plus a checks glyph.
-const prColumnWidth = 7
+// prOpenConfirmAbove is how many PRs `o` opens without asking first.
+const prOpenConfirmAbove = 5
 
-// prBadge renders a row's PR column (exactly prColumnWidth cells): the number,
-// colored by state, and a state glyph (see stateGlyph).
+// prColumnWidth is the badge column: "#12345", a state glyph, and " +N" when
+// the session has more PRs than the one shown.
+const prColumnWidth = 10
+
+// prBadge renders a row's PR column (exactly prColumnWidth cells): the latest
+// PR's number colored by state, its state glyph (see stateGlyph), and how many
+// other PRs the session has.
 func prBadge(d sessionDetails, status map[string]prInfo) (plain, colored string) {
 	l, ok := d.latestPR()
 	if !ok {
 		blank := strings.Repeat(" ", prColumnWidth)
 		return blank, blank
 	}
-	num := truncPad(fmt.Sprintf("#%d", l.Number), prColumnWidth-1)
+	num := truncPad(fmt.Sprintf("#%d", l.Number), 6)
 	info := status[l.URL]
 	glyph, gs := stateGlyph(info)
-	return num + glyph, prStyle(info).Render(num) + gs.Render(glyph)
+	more := morePRs(len(d.PRs) - 1)
+	return num + glyph + more, prStyle(info).Render(num) + gs.Render(glyph) + styDim.Render(more)
+}
+
+// morePRs is the badge's 3-cell "other PRs" count: " +2", " 9+" past nine.
+func morePRs(n int) string {
+	switch {
+	case n <= 0:
+		return "   "
+	case n <= 9:
+		return fmt.Sprintf(" +%d", n)
+	}
+	return " 9+"
 }
 
 // Glyphs for PRs that are no longer open. ⑂ stands in for GitHub's merge
@@ -377,5 +395,6 @@ func prStyle(info prInfo) lipgloss.Style {
 	return styDim // draft or unknown
 }
 
-// openURL opens a URL in the default browser.
-func openURL(url string) error { return exec.Command("open", url).Start() }
+// openURLs opens URLs in the default browser, one tab each, in order (so the
+// last ends up in front). A variable so tests can stand in for the browser.
+var openURLs = func(urls ...string) error { return exec.Command("open", urls...).Start() }
