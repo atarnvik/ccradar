@@ -113,26 +113,26 @@ func TestFetchPRsWithFakeGh(t *testing.T) {
 	}
 }
 
-func TestPRBadgeAndSummary(t *testing.T) {
+func TestPRBadgeAndPreviewLine(t *testing.T) {
 	d := sessionDetails{PRs: []prLink{{URL: "u", Number: 5691}}}
 	cases := map[string]struct {
 		info    prInfo
 		plain   string
-		summary string
+		preview string
 	}{
-		"unknown": {prInfo{}, "#5691  ", "#5691"},
-		"passing": {prInfo{State: "OPEN", Checks: "SUCCESS", Review: "APPROVED"}, "#5691 ✓", "#5691 open · checks ✓ · approved"},
-		"failing": {prInfo{State: "OPEN", Checks: "FAILURE"}, "#5691 ✗", "#5691 open · checks ✗"},
-		"draft":   {prInfo{State: "OPEN", Draft: true, Checks: "PENDING"}, "#5691 •", "#5691 draft · checks running"},
-		"merged":  {prInfo{State: "MERGED", Checks: "SUCCESS"}, "#5691  ", "#5691 merged"},
+		"unknown": {prInfo{}, "#5691  ", "#5691   "},
+		"passing": {prInfo{State: "OPEN", Checks: "SUCCESS", Title: "Social topics"}, "#5691 ✓", "#5691 ✓ Social topics"},
+		"failing": {prInfo{State: "OPEN", Checks: "FAILURE", Title: "Social topics"}, "#5691 ✗", "#5691 ✗ Social topics"},
+		"draft":   {prInfo{State: "OPEN", Draft: true, Checks: "PENDING", Title: "Social topics"}, "#5691 •", "#5691 • Social topics"},
+		"merged":  {prInfo{State: "MERGED", Checks: "SUCCESS"}, "#5691  ", "#5691   merged"},
 	}
 	for name, c := range cases {
 		plain, colored := prBadge(d, map[string]prInfo{"u": c.info})
 		if plain != c.plain || lipgloss.Width(colored) != prColumnWidth || len([]rune(plain)) != prColumnWidth {
 			t.Errorf("%s: badge = %q (colored width %d)", name, plain, lipgloss.Width(colored))
 		}
-		if got := prSummary(d.PRs[0], c.info); got != c.summary {
-			t.Errorf("%s: summary = %q, want %q", name, got, c.summary)
+		if got := prPreviewLine(d.PRs[0], c.info, 5, 40).plain; got != c.preview {
+			t.Errorf("%s: preview line = %q, want %q", name, got, c.preview)
 		}
 	}
 	if plain, _ := prBadge(sessionDetails{}, nil); plain != "       " {
