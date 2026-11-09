@@ -60,7 +60,8 @@ network calls are the update check and PR status lookups through your `gh`.
   **Click the notification to jump straight to that session's tab.** Toggle with
   `n`; the choice is remembered. (Click-to-jump needs `terminal-notifier`, which
   the Homebrew install pulls in automatically.)
-- **Fuzzy search** (`/`) across directory + session title, and a **sort toggle**
+- **Fuzzy search** (`/`) across directory + session title (or `#28` for the
+  session that opened PR #28), and a **sort toggle**
   (`s`) between last-active (the default) and alphabetical; the choice is
   remembered.
 - **Find a session from a loose description** (`?`): describe it the way you
@@ -134,7 +135,7 @@ go build -o ccradar ./cmd/ccradar && ./ccradar
 | `↑`/`↓` or `j`/`k` | move |
 | `tab` (or `1`/`2`) | switch Active / Historical |
 | `enter` | Active: focus tab · Historical: resume in a new tab |
-| `/` | fuzzy search (directory + title); `enter` keep, `esc` clear |
+| `/` | fuzzy search (directory + title, `#N` for a PR); `enter` keep, `esc` clear |
 | `?` | find a past session by description (asks Claude); `esc` back to the full list |
 | `s` | toggle sort: last-active (default) ↔ alphabetical (remembered across runs) |
 | `p` | toggle the preview pane |

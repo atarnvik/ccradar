@@ -91,6 +91,30 @@ func TestFindCatalogIncludesRecap(t *testing.T) {
 	}
 }
 
+func TestFindCatalogIncludesPRs(t *testing.T) {
+	catalog, _ := findCatalog([]HistEntry{{
+		SessionID: "a", CWD: "/w", Title: "Fix it", ModAt: time.Now(),
+		sessionDetails: sessionDetails{PRs: []prLink{{Repo: "o/r", Number: 12}, {Repo: "o/r", Number: 28}}},
+	}})
+	if !strings.Contains(catalog, "| PRs: #12 #28") {
+		t.Fatalf("catalog = %q", catalog)
+	}
+}
+
+func TestSearchFindsSessionByPRNumber(t *testing.T) {
+	m := model{view: viewHistory, width: 120, height: 20, query: "#28"}
+	m.history = []HistEntry{
+		{SessionID: "a", CWD: "/w", Title: "Opened 28", ModAt: time.Now(),
+			sessionDetails: sessionDetails{PRs: []prLink{{Repo: "o/r", Number: 28}}}},
+		{SessionID: "b", CWD: "/w", Title: "Opened 128", ModAt: time.Now(),
+			sessionDetails: sessionDetails{PRs: []prLink{{Repo: "o/r", Number: 128}}}},
+	}
+	m.rebuild()
+	if v := m.View(); !strings.Contains(v, "Opened 28") || strings.Contains(v, "Opened 128") {
+		t.Fatalf("view:\n%s", v)
+	}
+}
+
 func TestCostHiddenUntilToggled(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	m := model{view: viewHistory, preview: true, width: 120, height: 20}
