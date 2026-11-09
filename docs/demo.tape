@@ -3,54 +3,52 @@ Output docs/demo.gif
 
 Set Shell "zsh"
 Set FontSize 15
-Set Width 1180
-Set Height 640
+Set Width 1400
+Set Height 700
 Set Padding 24
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 70ms
+Set TypingSpeed 90ms
 
-# Build the demo binary off-camera.
+# Build the demo binary off-camera, with a clean config and cache so your own
+# preferences don't show up in the recording.
 Hide
-Type "mkdir -p /tmp/ccdemo && go build -o /tmp/ccdemo/ccradar ./cmd/ccradar && export PATH=/tmp/ccdemo:$PATH && export CCRADAR_DEMO=1 && clear"
+Type "rm -rf /tmp/ccdemo && mkdir -p /tmp/ccdemo && go build -o /tmp/ccdemo/ccradar ./cmd/ccradar && export PATH=/tmp/ccdemo:$PATH CCRADAR_DEMO=1 XDG_CONFIG_HOME=/tmp/ccdemo/config CCRADAR_CACHE_DIR=/tmp/ccdemo/cache && clear"
 Enter
-Sleep 6s
+Sleep 8s
 Show
 
-# Launch the dashboard.
+# Every live session, grouped by directory.
 Type "ccradar"
 Enter
-Sleep 2.2s
+Sleep 2.5s
 
-# Open the preview pane.
+# The preview pane: recap, PRs, background shells, last exchange.
 Type "p"
-Sleep 1.2s
+Sleep 1.5s
+Down@700ms 2
+Sleep 2.5s
+Down@700ms 2
+Sleep 2s
 
-# Move down through local into the container section (preview follows).
-Down@450ms 8
-Sleep 1.2s
-
-# Fuzzy search across directory + title.
+# Search by PR number.
 Type "/"
-Sleep 500ms
-Type "web"
-Sleep 1.8s
+Sleep 400ms
+Type "#405"
+Sleep 2s
 Escape
 Sleep 800ms
 
-# Toggle sort: alphabetical <-> last-active.
-Type "s"
-Sleep 1.6s
-Type "s"
+# Past sessions, ready to resume.
+Tab
+Sleep 1.5s
+Down@700ms 1
+Sleep 2.5s
+
+# Worktrees whose PRs are all merged.
+Type "W"
+Sleep 2.5s
+Escape
 Sleep 800ms
 
-# Switch to the Historical view and browse.
-Tab
-Sleep 1.6s
-Down@650ms 2
-Sleep 1.4s
-
-# Back to Active, then quit.
-Tab
-Sleep 1.4s
 Type "q"
-Sleep 1s
+Sleep 800ms

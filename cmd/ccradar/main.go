@@ -72,7 +72,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`ccradar — Claude Code session dashboard for Ghostty
+	fmt.Println(`ccradar — a dashboard for your Claude Code sessions
 
 Usage:
   ccradar [dir]         scope to a directory and its subdirectories (e.g. ccradar ~/src/app)

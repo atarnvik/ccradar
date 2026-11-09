@@ -44,6 +44,10 @@ type wtScanMsg struct{ stale []staleWT }
 // startWTScan kicks off a scan over the loaded sessions' directories, unless
 // one is running or PR lookups are off.
 func (m *model) startWTScan() tea.Cmd {
+	if demoMode() && !m.wtBusy {
+		m.wtBusy = true
+		return func() tea.Msg { return wtScanMsg{demoStaleWorktrees()} }
+	}
 	if m.wtBusy || !prStatusEnabled() {
 		return nil
 	}
@@ -374,6 +378,10 @@ func removeWorktreesCmd(wts []staleWT) tea.Cmd {
 	return func() tea.Msg {
 		msg := wtRemovedMsg{failed: map[string]string{}}
 		for _, w := range wts {
+			if demoMode() {
+				msg.removed = append(msg.removed, w.Path) // pretend: demo paths aren't real
+				continue
+			}
 			out, err := exec.Command("git", "-C", w.Main, "worktree", "remove", w.Path).CombinedOutput()
 			if err != nil {
 				reason := strings.TrimSpace(string(out))
