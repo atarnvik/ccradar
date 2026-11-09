@@ -85,6 +85,7 @@ type model struct {
 	prBusy     bool              // a PR status lookup is in flight
 	anyPR      bool              // some row in the current list has a PR (shows the PR column)
 	anyShell   bool              // some live row has background shells (shows the ⚙ column)
+	anyCtx     bool              // some live row knows its context size (shows that column)
 	showCost   bool // show past sessions' cost (off by default; $ toggles it)
 	railW      int  // preview rail width the user chose with [ / ] (0 = default)
 }

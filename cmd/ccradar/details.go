@@ -16,6 +16,7 @@ type sessionDetails struct {
 	RecapAt time.Time // when that recap was written
 	Cost    costState // totals as of the session's last exit (zero if never recorded)
 	PRs     []prLink  // pull requests the session opened or touched, most recent last
+	Context int       // tokens in context as of the latest turn (0 = unknown)
 }
 
 // costState is the last cost-state record. Claude Code writes it when a session
@@ -55,6 +56,18 @@ func (d *sessionDetails) scanDetails(line []byte) {
 		}
 	case bytes.Contains(line, []byte(`"type":"pr-link"`)):
 		d.scanPRLink(line)
+	case bytes.Contains(line, []byte(`"type":"assistant"`)) && bytes.Contains(line, []byte(`"usage"`)):
+		d.scanUsage(line)
+	case bytes.Contains(line, []byte(`"subtype":"compact_boundary"`)):
+		var r struct {
+			Subtype string `json:"subtype"`
+			Meta    struct {
+				Post int `json:"postTokens"`
+			} `json:"compactMetadata"`
+		}
+		if json.Unmarshal(line, &r) == nil && r.Subtype == "compact_boundary" && r.Meta.Post > 0 {
+			d.Context = r.Meta.Post // until the next turn reports its own size
+		}
 	case bytes.Contains(line, []byte(`"type":"cost-state"`)):
 		var r struct {
 			Type string `json:"type"`
@@ -63,6 +76,42 @@ func (d *sessionDetails) scanDetails(line []byte) {
 		if json.Unmarshal(line, &r) == nil && r.Type == "cost-state" {
 			d.Cost = r.costState
 		}
+	}
+}
+
+// scanUsage records the context size from a main-thread assistant turn: the
+// prompt it was sent (uncached + cache-written + cache-read input tokens).
+// Sub-agent turns and synthetic (error/interrupt) turns are skipped.
+func (d *sessionDetails) scanUsage(line []byte) {
+	var r struct {
+		Type        string `json:"type"`
+		IsSidechain bool   `json:"isSidechain"`
+		Message     struct {
+			Model string `json:"model"`
+			Usage struct {
+				Input      int `json:"input_tokens"`
+				CacheWrite int `json:"cache_creation_input_tokens"`
+				CacheRead  int `json:"cache_read_input_tokens"`
+			} `json:"usage"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &r) != nil || r.Type != "assistant" || r.IsSidechain || r.Message.Model == "<synthetic>" {
+		return
+	}
+	if n := r.Message.Usage.Input + r.Message.Usage.CacheWrite + r.Message.Usage.CacheRead; n > 0 {
+		d.Context = n
+	}
+}
+
+// fmtTokens renders a token count in at most 5 cells (950, 12k, 412k, 1.2M).
+func fmtTokens(n int) string {
+	switch {
+	case n < 1000:
+		return fmt.Sprint(n)
+	case n < 999_500:
+		return fmt.Sprintf("%dk", (n+500)/1000)
+	default:
+		return fmt.Sprintf("%.1fM", float64(n)/1e6)
 	}
 }
 

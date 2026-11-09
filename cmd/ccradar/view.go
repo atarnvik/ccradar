@@ -273,15 +273,16 @@ func (m model) renderListLine(i, cw int) string {
 }
 
 // costColumnMinWidth / prColumnMinWidth are the narrowest lists that still get
-// a cost / PR column.
+// a cost / PR / context column.
 const (
 	costColumnMinWidth = 70
 	prColumnMinWidth   = 70
+	ctxColumnMinWidth  = 70
 )
 
 // rowColumns builds the aligned columns for a session/history row: status
 // and age (live rows) or age (past rows), the title, then the optional columns
-// — cost, PR, background shells — and the model.
+// — cost, PR, background shells, context size (live rows) — and the model.
 // The title column flexes so the row fills cw-4 cells (the 4 is the row's
 // left indent), keeping the optional columns aligned at the right edge.
 func (m model) rowColumns(r row, cw int) (plain, colored string) {
@@ -320,6 +321,14 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 			sh = truncPad(fmt.Sprintf("⚙%d", n), shellColumnWidth)
 		}
 		tail, tailC = append(tail, sh), append(tailC, styWorking.Render(sh))
+	}
+	if m.anyCtx && r.kind == rowSession && cw >= ctxColumnMinWidth {
+		ctx := ""
+		if n := r.session.Context; n > 0 {
+			ctx = fmtTokens(n)
+		}
+		ctx = fmt.Sprintf("%5s", ctx)
+		tail, tailC = append(tail, ctx), append(tailC, styDim.Render(ctx))
 	}
 	ms := truncPad(modelShort(mdl), 10)
 	tail, tailC = append(tail, ms), append(tailC, styModel.Render(ms))
