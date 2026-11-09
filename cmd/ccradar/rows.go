@@ -31,7 +31,23 @@ func (m *model) rebuild() {
 		}
 	}
 
-	if m.view == viewActive {
+	if m.view == viewAgents {
+		group, dir := "", ""
+		for _, a := range m.agents {
+			if !fuzzyMatch(m.query, agentHay(a)) {
+				continue
+			}
+			if g := agentGroup(a.State); g != group {
+				group, dir = g, ""
+				rows = append(rows, row{kind: rowDivider, header: g})
+			}
+			if a.CWD != dir {
+				dir = a.CWD
+				rows = append(rows, row{kind: rowHeader, header: dirDisplay(a.CWD)})
+			}
+			rows = append(rows, row{kind: rowAgent, agent: a})
+		}
+	} else if m.view == viewActive {
 		m.sortSessions(m.sessions)
 		order := sessionSources(m.sessions)
 		sectioned := len(order) > 1
@@ -260,6 +276,9 @@ func (m model) prLinksDue() []prLink {
 	}
 	for _, h := range m.history {
 		add(h.PRs)
+	}
+	for _, a := range m.agents {
+		add(a.PRs)
 	}
 	return duePRs(links, m.prStatus, time.Now())
 }

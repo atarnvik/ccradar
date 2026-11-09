@@ -152,6 +152,24 @@ func demoPRStatus() map[string]prInfo {
 	return out
 }
 
+func demoAgents() []Agent {
+	now := time.Now()
+	as := []Agent{
+		{ID: "a1b2c3d4", CWD: demoDir("src/api-gateway"), Name: "Migrate webhooks to the outbox", State: "blocked",
+			Needs: "Both PRs are green. Should I merge #366 before #371, or squash them into one?",
+			Detail: "#366 and #371 ready; waiting on merge order", Model: "claude-opus-4-8", Branch: "outbox",
+			UpdatedAt: now.Add(-35 * time.Minute), sessionDetails: sessionDetails{PRs: []prLink{demoPR(366)}}},
+		{ID: "e5f6a7b8", CWD: demoDir("src/web-app"), Name: "Bump React to 19", State: "working",
+			Detail: "Fixing the 3 failing snapshot tests after the upgrade", Model: "claude-sonnet-4-6",
+			Intent: "upgrade react to 19 and fix whatever breaks", UpdatedAt: now.Add(-2 * time.Minute)},
+		{ID: "c9d0e1f2", CWD: demoDir("src/infra"), Name: "Audit IAM policies", State: "done",
+			Result: "Found 4 roles with wildcard actions; tightened 3 and flagged 1 that needs an owner's call.",
+			Model: "claude-opus-4-8", UpdatedAt: now.Add(-20 * time.Hour), sessionDetails: sessionDetails{PRs: []prLink{demoPR(377)}}},
+	}
+	sortAgents(as)
+	return as
+}
+
 // demoDriver is a no-op terminal so focus/resume don't touch real apps.
 type demoDriver struct{}
 

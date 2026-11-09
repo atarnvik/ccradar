@@ -16,7 +16,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		cmds := []tea.Cmd{loadActiveCmd(), tickCmd()}
 		if m.view == viewHistory {
-			cmds = append(cmds, loadHistCmd(activeSessionIDs(m.sessions)))
+			cmds = append(cmds, loadHistCmd(m.hiddenFromHistory()))
+		}
+		if c := m.maybeLoadAgents(); c != nil {
+			cmds = append(cmds, c)
+		}
+		return m, tea.Batch(cmds...)
+	case agentsMsg:
+		cmds := m.observeAgents([]Agent(msg))
+		m.agents = []Agent(msg)
+		m.agentsLoaded = true
+		m.agentsBusy = false
+		if m.view == viewAgents {
+			m.rebuild()
+		}
+		if c := m.maybeFetchPRs(); c != nil {
+			cmds = append(cmds, c)
 		}
 		return m, tea.Batch(cmds...)
 	case loadedMsg:
@@ -26,7 +41,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Historical tab shows an accurate count from the start, not after a visit.
 		if !m.histLoaded {
 			m.histLoaded = true
-			cmds = append(cmds, loadHistCmd(activeSessionIDs(m.sessions)))
+			cmds = append(cmds, loadHistCmd(m.hiddenFromHistory()))
 		}
 		if m.view == viewActive {
 			m.rebuild()
@@ -114,7 +129,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.move(-1)
 		case "down", "j":
 			m.move(1)
-		case "tab", "1", "2", "left", "right", "h", "l":
+		case "tab", "shift+tab", "1", "2", "3", "left", "right", "h", "l":
 			return m.switchView(msg.String())
 		case "s":
 			if m.sort == sortAlpha {
@@ -144,10 +159,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.savePrefs()
 			m.flash = "cost " + onOff(m.showCost)
 		case "r":
-			if m.view == viewActive {
+			switch m.view {
+			case viewActive:
 				return m, loadActiveCmd()
+			case viewAgents:
+				m.agentsBusy = false
+				return m, m.maybeLoadAgents()
 			}
-			return m, loadHistCmd(activeSessionIDs(m.sessions))
+			return m, loadHistCmd(m.hiddenFromHistory())
 		case "enter":
 			if m.activate() && popupMode {
 				return m, tea.Quit
@@ -242,18 +261,19 @@ func (m *model) clearFind() {
 }
 
 func (m model) switchView(key string) (tea.Model, tea.Cmd) {
+	const views = 3
 	target := m.view
 	switch key {
 	case "1":
 		target = viewActive
 	case "2":
 		target = viewHistory
-	default: // tab / arrows toggle
-		if m.view == viewActive {
-			target = viewHistory
-		} else {
-			target = viewActive
-		}
+	case "3":
+		target = viewAgents
+	case "shift+tab", "left", "h":
+		target = (m.view + views - 1) % views
+	default: // tab / right / l
+		target = (m.view + 1) % views
 	}
 	if target == m.view {
 		return m, nil
@@ -264,8 +284,11 @@ func (m model) switchView(key string) (tea.Model, tea.Cmd) {
 	m.flash = ""
 	m.pendingKill = 0
 	m.rebuild()
-	if m.view == viewHistory {
-		return m, loadHistCmd(activeSessionIDs(m.sessions)) // refresh on entry
+	switch m.view {
+	case viewHistory:
+		return m, loadHistCmd(m.hiddenFromHistory()) // refresh on entry
+	case viewAgents:
+		return m, m.maybeLoadAgents()
 	}
 	return m, nil
 }
@@ -301,6 +324,15 @@ func (m *model) activate() bool {
 		default:
 			m.flash = fmt.Sprintf("detached (pid %d) — no tab to focus; press x to kill", s.PID)
 		}
+	case rowAgent:
+		a := r.agent
+		if err := activeDriver().OpenResume(a.CWD, attachCommand(a.ID)); err != nil {
+			_ = copyToClipboard(attachCommand(a.ID))
+			m.flash = "couldn't open tab — attach command copied to clipboard"
+			return false
+		}
+		m.flash = "⇢ attaching to " + firstNonEmpty(a.Name, a.ID) + " in a new tab"
+		return true
 	case rowHist:
 		h := r.hist
 		cwd, cmd := resumeInvocation(h.CWD, h.Container, h.Source, h.SessionID)
@@ -350,6 +382,10 @@ func (m *model) copyResume() {
 	}
 	r := m.rows[m.cursor]
 	switch r.kind {
+	case rowAgent:
+		if copyToClipboard(attachCommand(r.agent.ID)) == nil {
+			m.flash = "copied attach command"
+		}
 	case rowHist:
 		if copyToClipboard(resumeClipboard(r.hist.CWD, r.hist.Container, r.hist.Source, r.hist.SessionID)) == nil {
 			m.flash = "copied resume command"

@@ -233,7 +233,7 @@ func metaFor(sid string) transcriptMeta {
 	if len(matches) == 0 {
 		return transcriptMeta{}
 	}
-	return scanTranscript(matches[0])
+	return scanTranscriptCached(matches[0])
 }
 
 // scanTitle extracts an ai-title from a transcript line, if present.
