@@ -63,6 +63,7 @@ type model struct {
 	height   int
 	flash    string
 	pendingKill int // pid armed for kill confirmation (0 = none)
+	showCost   bool // show past sessions' cost (off by default; $ toggles it)
 }
 
 type tickMsg time.Time

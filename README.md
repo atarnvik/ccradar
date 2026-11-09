@@ -28,9 +28,9 @@ data and drives your terminal through its AppleScript API. No daemon, no network
   the session stands (the "while you were away" summary), and its last prompt +
   last reply, so you can tell sessions apart at a glance. Auto-hidden on narrow
   terminals.
-- **Cost per past session** — the Historical view shows what each session cost
-  (and the preview its lines added/removed), from the totals Claude Code records
-  when a session exits.
+- **Cost per past session** (off by default; press `$` to toggle) — the
+  Historical view shows what each session cost (and the preview its lines
+  added/removed), from the totals Claude Code records when a session exits.
 - **Your session names win** — a name you gave a session is shown instead of the
   auto-generated title (both are searchable).
 - **Notifications** — get a native macOS notification the moment a session leaves
