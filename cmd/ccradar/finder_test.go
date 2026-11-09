@@ -15,8 +15,8 @@ import (
 var findHistory = []HistEntry{
 	{SessionID: "sid-old", CWD: "/w/app", Title: "Git worktrees disk usage", ModAt: time.Now().Add(-24 * time.Hour),
 		Prompts: []string{"clean up docker"}},
-	{SessionID: "sid-evals", CWD: "/w/yogi", Title: "Social topic tools in Ask Yogi evals", Branch: "main",
-		ModAt: time.Now().Add(-30 * time.Minute), Prompts: []string{"Wire the social topic tools\ninto the evals", strings.Repeat("x", 500)}},
+	{SessionID: "sid-evals", CWD: "/w/shop", Title: "Search tools in assistant evals", Branch: "main",
+		ModAt: time.Now().Add(-30 * time.Minute), Prompts: []string{"Wire the search tools\ninto the evals", strings.Repeat("x", 500)}},
 	{SessionID: "sid-box", CWD: "/workspaces/app", Title: "Container work", Source: "devbox",
 		ModAt: time.Now().Add(-2 * time.Hour), LastPrompt: "only the latest"},
 	{SessionID: "sid-empty", CWD: "/w/app", ModAt: time.Now()}, // nothing to match on
@@ -29,10 +29,10 @@ func TestFindCatalog(t *testing.T) {
 		t.Fatalf("want 3 lines (empty session skipped), got %q", catalog)
 	}
 	// newest first, positional ids mapping back to sessions
-	if !strings.HasPrefix(lines[0], "s1 | /w/yogi | 30m ago | main | Social topic tools in Ask Yogi evals | ") || ids["s1"] != "sid-evals" {
+	if !strings.HasPrefix(lines[0], "s1 | /w/shop | 30m ago | main | Search tools in assistant evals | ") || ids["s1"] != "sid-evals" {
 		t.Errorf("first line = %q, ids = %v", lines[0], ids)
 	}
-	if !strings.Contains(lines[0], `"Wire the social topic tools into the evals"`) {
+	if !strings.Contains(lines[0], `"Wire the search tools into the evals"`) {
 		t.Errorf("prompt whitespace not collapsed: %q", lines[0])
 	}
 	if strings.Contains(lines[0], strings.Repeat("x", findPromptLen+1)) {
@@ -77,7 +77,7 @@ func TestAskClaudeWithFakeBinary(t *testing.T) {
 printf '%s\n' "$@" > "` + dir + `/args"
 cat > "` + dir + `/stdin"
 pwd > "` + dir + `/pwd"
-echo '{"type":"result","is_error":false,"structured_output":{"matches":[{"id":"s1","why":"evals for social tools"}]}}'
+echo '{"type":"result","is_error":false,"structured_output":{"matches":[{"id":"s1","why":"evals for search tools"}]}}'
 `
 	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -85,11 +85,11 @@ echo '{"type":"result","is_error":false,"structured_output":{"matches":[{"id":"s
 	t.Setenv("CCRADAR_CLAUDE", fake)
 	t.Setenv("CCRADAR_FIND_MODEL", "test-model")
 
-	hits, err := askClaude("the ask yogi evals one", findHistory)
+	hits, err := askClaude("the assistant evals one", findHistory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hits["sid-evals"].why != "evals for social tools" || len(hits) != 1 {
+	if hits["sid-evals"].why != "evals for search tools" || len(hits) != 1 {
 		t.Fatalf("hits = %+v", hits)
 	}
 	args, _ := os.ReadFile(filepath.Join(dir, "args"))
@@ -99,8 +99,8 @@ echo '{"type":"result","is_error":false,"structured_output":{"matches":[{"id":"s
 		}
 	}
 	stdin, _ := os.ReadFile(filepath.Join(dir, "stdin"))
-	if !strings.Contains(string(stdin), "Social topic tools in Ask Yogi evals") ||
-		!strings.Contains(string(stdin), "Description: the ask yogi evals one") {
+	if !strings.Contains(string(stdin), "Search tools in assistant evals") ||
+		!strings.Contains(string(stdin), "Description: the assistant evals one") {
 		t.Errorf("stdin = %s", stdin)
 	}
 	pwd, _ := os.ReadFile(filepath.Join(dir, "pwd"))
@@ -172,13 +172,13 @@ func TestFinderFlow(t *testing.T) {
 		t.Fatal("stale reply applied")
 	}
 	tm, _ = m.Update(findMsg{seq: m.findSeq, hits: map[string]findHit{
-		"sid-old": {1, "docker cleanup"}, "sid-evals": {0, "evals for social tools"},
+		"sid-old": {1, "docker cleanup"}, "sid-evals": {0, "evals for search tools"},
 	}})
 	m = tm.(model)
 	if got := strings.Join(histIDs(m), ","); got != "sid-evals,sid-old" {
 		t.Fatalf("rows = %s, want ranked hits only", got)
 	}
-	if !strings.Contains(m.View(), "evals for social tools") { // preview off → shown on the ? line
+	if !strings.Contains(m.View(), "evals for search tools") { // preview off → shown on the ? line
 		t.Error("selected match reason not shown")
 	}
 

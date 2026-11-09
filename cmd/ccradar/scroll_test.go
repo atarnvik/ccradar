@@ -316,8 +316,8 @@ func TestLatestIfNewerOptOutAndDevBuild(t *testing.T) {
 }
 
 func TestParseDockerSource(t *testing.T) {
-	a := parseDockerSource("yogi-dev")
-	if a.kind != srcDocker || a.selector != "yogi-dev" || a.label != "yogi-dev" || a.claudeDir != "/home/vscode/.claude" {
+	a := parseDockerSource("api-dev")
+	if a.kind != srcDocker || a.selector != "api-dev" || a.label != "api-dev" || a.claudeDir != "/home/vscode/.claude" {
 		t.Fatalf("default: %+v", a)
 	}
 	b := parseDockerSource("svc=/root/.claude")
@@ -334,7 +334,7 @@ func TestParseDockerSessions(t *testing.T) {
 		strings.Join([]string{"7", "sid-dead", "/workspaces/app", "idle", "900", "0", "old", "claude-sonnet-4-6", "main", "x"}, us), // not alive → skipped
 	}, "\n")
 
-	got := parseDockerSessions(rows, "yogi-dev", "container123")
+	got := parseDockerSessions(rows, "api-dev", "container123")
 	if len(got) != 1 {
 		t.Fatalf("want 1 live session, got %d", len(got))
 	}
@@ -342,7 +342,7 @@ func TestParseDockerSessions(t *testing.T) {
 	if s.PID != 42 || s.SessionID != "sid-a" || s.CWD != "/workspaces/app" || s.Status != "busy" ||
 		s.UpdatedAt != 1000 || s.Title != "Fix the bug" || s.Model != "claude-opus-4-8" ||
 		s.Branch != "main" || s.LastPrompt != "fix the flaky test" ||
-		s.Source != "yogi-dev" || s.Container != "container123" || !s.remote() {
+		s.Source != "api-dev" || s.Container != "container123" || !s.remote() {
 		t.Fatalf("parsed wrong: %+v", s)
 	}
 }
@@ -355,14 +355,14 @@ func TestParseDockerHistory(t *testing.T) {
 		// last-record timestamp wins over an mtime bumped by bookkeeping records
 		strings.Join([]string{"1800000000", "sid-ts", "/workspaces/app", "Old", "claude-opus-4-8", "main", "y", "2026-09-01T10:00:00.000Z"}, us),
 	}, "\n")
-	got := parseDockerHistory(rows, "yogi", "cid1", map[string]bool{"sid-live": true})
+	got := parseDockerHistory(rows, "api", "cid1", map[string]bool{"sid-live": true})
 	if len(got) != 2 {
 		t.Fatalf("want 2 (live excluded), got %d", len(got))
 	}
 	h := got[0]
 	if h.SessionID != "sid-h" || h.CWD != "/workspaces/app" || h.Title != "Add spans" ||
 		h.Branch != "main" || h.LastPrompt != "instrument the pipeline" ||
-		h.Source != "yogi" || h.Container != "cid1" || h.ModAt.Unix() != 1700000000 {
+		h.Source != "api" || h.Container != "cid1" || h.ModAt.Unix() != 1700000000 {
 		t.Fatalf("wrong: %+v", h)
 	}
 	if want := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC); !got[1].ModAt.Equal(want) {
