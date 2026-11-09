@@ -103,6 +103,9 @@ func (m model) previewLines(w, h int) []string {
 		d, shells = s.sessionDetails, s.Shells
 		title, source, dir = displayTitle(d, s.Title), s.Source, dirDisplay(s.CWD)
 		meta = []string{s.Branch, modelShort(s.Model), s.Status + " " + fmtAge(nowMs()-s.UpdatedAt)}
+		if s.SurfaceID == "" {
+			meta = append(meta, fmt.Sprintf("pid %d", s.PID)) // detached: what x would kill
+		}
 		prompt, reply = s.LastPrompt, s.LastReply
 	case rowHist:
 		hh := r.hist
