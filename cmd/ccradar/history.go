@@ -96,7 +96,7 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 			continue
 		}
 		reads++
-		tm := scanTranscript(e.path)
+		tm := scanTranscriptCached(e.path)
 		if tm.cwd == "" || !underFilter(tm.cwd) {
 			continue // need a directory, and it must be within the filter
 		}
