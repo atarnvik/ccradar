@@ -107,7 +107,7 @@ func debugMode(which string) {
 		return
 	}
 	// render: one frame of each view
-	m := model{sessions: sessions, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
+	m := model{sessions: sessions, sessionsReady: true, histReady: true, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
 	m.prStatus = fetchPRs(m.prLinksDue())
 	if demoMode() {
 		m.prStatus = demoPRStatus()

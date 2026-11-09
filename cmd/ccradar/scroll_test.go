@@ -561,3 +561,30 @@ func TestResizedRailNeverOverflows(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadingStateBeforeFirstLoad(t *testing.T) {
+	m := model{width: 120, height: 20}
+	out := stripStyles(m.View())
+	if !strings.Contains(out, "loading live sessions…") || strings.Contains(out, "no live sessions") {
+		t.Fatalf("before the first load:\n%s", out)
+	}
+	if !strings.Contains(out, "Active (…)") || !strings.Contains(out, "Historical (…)") {
+		t.Errorf("tab counts should show … while loading: %q", m.tabBar())
+	}
+
+	tm, _ := m.Update(loadedMsg(nil))
+	m = tm.(model)
+	if out := stripStyles(m.View()); !strings.Contains(out, "no live sessions") || !strings.Contains(out, "Active (0)") {
+		t.Errorf("after an empty load:\n%s", out)
+	}
+	m.view = viewHistory
+	m.rebuild()
+	if out := stripStyles(m.View()); !strings.Contains(out, "loading past sessions…") {
+		t.Errorf("history still loading:\n%s", out)
+	}
+	tm, _ = m.Update(histMsg(nil))
+	m = tm.(model)
+	if out := stripStyles(m.View()); !strings.Contains(out, "no past sessions") || !strings.Contains(out, "Historical (0)") {
+		t.Errorf("after an empty history load:\n%s", out)
+	}
+}

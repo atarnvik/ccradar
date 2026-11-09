@@ -63,7 +63,9 @@ type model struct {
 	notify     bool   // send a notification on busy→idle
 	preview    bool   // show the right-hand preview pane
 	latestVer  string // newer available version ("" = up to date / unknown)
-	histLoaded bool   // history fetched at least once (for an accurate count upfront)
+	histRequested bool // history load started (done once live sessions are known, to dedup)
+	sessionsReady bool // the first live-session load has arrived
+	histReady     bool // the first history load has arrived
 	prevStatus map[string]string // sessionID → last seen status (transition tracking)
 	sessions   []Session
 	history    []HistEntry

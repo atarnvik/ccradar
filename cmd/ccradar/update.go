@@ -24,8 +24,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessions = []Session(msg)
 		// Load history once now that we know the active IDs (to dedup), so the
 		// Historical tab shows an accurate count from the start, not after a visit.
-		if !m.histLoaded {
-			m.histLoaded = true
+		m.sessionsReady = true
+		if !m.histRequested {
+			m.histRequested = true
 			cmds = append(cmds, loadHistCmd(activeSessionIDs(m.sessions)))
 		}
 		if m.view == viewActive {
@@ -39,6 +40,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case histMsg:
 		m.history = []HistEntry(msg)
+		m.histReady = true
 		if m.view == viewHistory {
 			m.rebuild()
 		}
