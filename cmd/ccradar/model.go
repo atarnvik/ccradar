@@ -77,6 +77,7 @@ type model struct {
 	prStatus   map[string]prInfo // PR URL → live status from gh
 	prBusy     bool              // a PR status lookup is in flight
 	anyPR      bool              // some row in the current list has a PR (shows the PR column)
+	anyShell   bool              // some live row has background shells (shows the ⚙ column)
 }
 
 type tickMsg time.Time

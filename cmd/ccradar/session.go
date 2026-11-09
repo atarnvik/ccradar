@@ -31,6 +31,7 @@ type Session struct {
 	SurfaceID  string // matched terminal surface id; "" if no tab found
 	Source     string // source label ("" = local; else a --docker container)
 	Container  string // resolved docker container id ("" = local)
+	Shells     []bgShell // background shells still running
 	sessionDetails
 }
 
@@ -80,6 +81,8 @@ type regFile struct {
 	CWD        string `json:"cwd"`
 	Status     string `json:"status"`
 	UpdatedAt  int64  `json:"updatedAt"`
+	StartedAt  int64  `json:"startedAt"`
+	StatusAt   int64  `json:"statusUpdatedAt"`
 	Entrypoint string `json:"entrypoint"`
 	Name       string `json:"name"`
 	NameSource string `json:"nameSource"`
@@ -201,10 +204,16 @@ func localSessions() []Session {
 			Status:    rf.Status,
 			UpdatedAt: rf.UpdatedAt,
 		}
+		// Rows show how long a session has been in its status. updatedAt
+		// equals statusUpdatedAt today, but has been a heartbeat before.
+		if rf.StatusAt > 0 {
+			s.UpdatedAt = rf.StatusAt
+		}
 		tm := metaFor(rf.SessionID)
 		s.Title, s.Model, s.Branch = tm.title, tm.model, tm.branch
 		s.LastPrompt, s.LastReply = tm.prompt, tm.reply
 		s.sessionDetails = tm.details
+		s.Shells = tm.shells.running(time.UnixMilli(rf.StartedAt))
 		if rf.Name != "" && rf.NameSource != derivedName {
 			s.Name = rf.Name
 		}
