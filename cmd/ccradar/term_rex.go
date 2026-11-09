@@ -152,7 +152,8 @@ func (rexDriver) Focus(id string) error {
 }
 
 // Open a tab in ccradar's own session (or the first session when run outside
-// Rex), type the command into its shell, and show it.
+// Rex), type the command into its shell, and show it. The tab gets no label:
+// an unlabeled tab shows its pane's title, which Claude keeps current.
 const rexResumeLua = `
 local sid = rex.args.session_id
 if sid == "" then
@@ -163,7 +164,6 @@ end
 rex.session.attach{session_id = sid}
 local w, err = rex.session.new_window{
   session_id = sid,
-  window_label = rex.args.label,
   layout = rex.layout.block{
     flavor = "com.superlogical.terminal.shell",
     options = {cwd = rex.args.cwd, initial_input = rex.args.input},
@@ -175,7 +175,6 @@ pcall(rex.client.queue, "session.select", {session_id = sid, window_id = w.windo
 func (rexDriver) OpenResume(cwd, command string) error {
 	_, err := rexDo(rexResumeLua, map[string]string{
 		"session_id": os.Getenv("REX_SESSION"),
-		"label":      filepath.Base(cwd),
 		"cwd":        cwd,
 		"input":      command + "\n",
 	})
