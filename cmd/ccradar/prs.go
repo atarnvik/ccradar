@@ -238,35 +238,5 @@ func prStyle(info prInfo) lipgloss.Style {
 	return styDim // draft or unknown
 }
 
-// prSummary is the preview's line for one PR, e.g. "#5691 open · checks ✓ · approved".
-func prSummary(l prLink, info prInfo) string {
-	s := fmt.Sprintf("#%d", l.Number)
-	switch {
-	case info.State == "":
-		return s
-	case info.Draft && info.State == "OPEN":
-		s += " draft"
-	default:
-		s += " " + strings.ToLower(info.State)
-	}
-	if info.State == "OPEN" {
-		switch info.Checks {
-		case "SUCCESS":
-			s += " · checks ✓"
-		case "FAILURE", "ERROR":
-			s += " · checks ✗"
-		case "PENDING", "EXPECTED":
-			s += " · checks running"
-		}
-		switch info.Review {
-		case "APPROVED":
-			s += " · approved"
-		case "CHANGES_REQUESTED":
-			s += " · changes requested"
-		}
-	}
-	return s
-}
-
 // openURL opens a URL in the default browser.
 func openURL(url string) error { return exec.Command("open", url).Start() }
