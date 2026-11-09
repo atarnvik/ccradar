@@ -28,7 +28,8 @@ network calls are the update check and PR status lookups through your `gh`.
   session's directory, git branch, model/status, Claude's latest **recap** of where
   the session stands (the "while you were away" summary), and its last prompt +
   last reply, so you can tell sessions apart at a glance. Auto-hidden on narrow
-  terminals.
+  terminals. It takes about a third of a wide terminal; move the divider with
+  `[` (wider preview) and `]` (narrower), and the width is remembered.
 - **Background shells** — live sessions that left background commands running
   (dev servers, watchers, long test runs) show `⚙N`, and the preview lists what
   each one is and how long it has been up, so you know which tab is holding

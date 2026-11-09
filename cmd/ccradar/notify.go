@@ -43,6 +43,7 @@ type config struct {
 	Preview bool   `json:"preview"`
 	Sort    string `json:"sort"` // "recent" or "alpha"
 	Cost    bool   `json:"cost"` // show session cost (toggled with $)
+	RailW   int    `json:"previewWidth,omitempty"` // preview width chosen with [ / ] (0 = default)
 }
 
 func configPath() string {

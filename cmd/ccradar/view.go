@@ -135,8 +135,8 @@ func (m model) View() string {
 	cw := m.width
 	railW := 0
 	if showRail {
-		railW = 38
-		cw = m.width - railW - 3 // " │ " separator = 3 cells
+		railW = m.railWidth()
+		cw = m.width - railW - railGap
 	}
 
 	lines := make([]string, 0, v)
@@ -493,6 +493,46 @@ func (m model) searchLine() string {
 
 // showRail reports whether the preview pane fits and is enabled.
 func (m model) showRail() bool { return m.preview && len(m.rows) > 0 && m.width >= 100 }
+
+// Preview rail sizing. The list keeps at least listMinWidth columns so titles
+// stay readable; the rail is never narrower than railMinWidth.
+const (
+	railGap          = 3 // " │ " between the list and the rail
+	railMinWidth     = 28
+	railDefaultWidth = 38 // the default on narrower terminals; wider ones get a third
+	listMinWidth     = 59 // what the fixed 38-col rail left at the 100-col minimum
+	railStep         = 4 // columns per [ / ] press
+)
+
+// railWidth is the preview rail's width for the current terminal: the user's
+// chosen width (m.railW) or the default, clamped to fit.
+func (m model) railWidth() int {
+	w := m.railW
+	if w <= 0 {
+		w = max(railDefaultWidth, m.width/3)
+	}
+	return min(max(w, railMinWidth), max(m.width-railGap-listMinWidth, railMinWidth))
+}
+
+// resizeRail widens (delta > 0) or narrows the preview rail and remembers it.
+func (m *model) resizeRail(delta int) {
+	if !m.showRail() {
+		m.flash = "preview is off — press p to show it"
+		return
+	}
+	before := m.railWidth()
+	m.railW = before + delta
+	m.railW = m.railWidth() // clamp, so the next press moves from the visible width
+	switch {
+	case m.railW == before && delta > 0:
+		m.flash = fmt.Sprintf("preview %d cols (widest)", m.railW)
+	case m.railW == before:
+		m.flash = fmt.Sprintf("preview %d cols (narrowest)", m.railW)
+	default:
+		m.flash = fmt.Sprintf("preview %d cols", m.railW)
+	}
+	m.savePrefs()
+}
 
 // selectedWhy is the finder's reason for the selected row ("" outside results).
 func (m model) selectedWhy() string {
