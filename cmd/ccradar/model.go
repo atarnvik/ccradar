@@ -11,6 +11,7 @@ type viewKind int
 const (
 	viewActive viewKind = iota
 	viewHistory
+	viewAgents
 )
 
 type sortMode int
@@ -28,9 +29,10 @@ const (
 	rowDivider
 	rowSession
 	rowHist
+	rowAgent
 )
 
-func selectable(k rowKind) bool { return k == rowSession || k == rowHist }
+func selectable(k rowKind) bool { return k == rowSession || k == rowHist || k == rowAgent }
 
 // details is the row's session details (zero for headers and dividers).
 func (r row) details() sessionDetails {
@@ -39,6 +41,8 @@ func (r row) details() sessionDetails {
 		return r.session.sessionDetails
 	case rowHist:
 		return r.hist.sessionDetails
+	case rowAgent:
+		return r.agent.sessionDetails
 	}
 	return sessionDetails{}
 }
@@ -48,6 +52,7 @@ type row struct {
 	header  string
 	session Session
 	hist    HistEntry
+	agent   Agent
 }
 
 type model struct {
@@ -78,6 +83,11 @@ type model struct {
 	prBusy     bool              // a PR status lookup is in flight
 	anyPR      bool              // some row in the current list has a PR (shows the PR column)
 	anyShell   bool              // some live row has background shells (shows the ⚙ column)
+	agents         []Agent           // background sessions
+	agentsLoaded   bool              // agents fetched at least once
+	agentsBusy     bool              // an agents load is in flight
+	agentsAt       time.Time         // when the last agents load was started
+	prevAgentState map[string]string // agent id → last seen state (for "needs you" notifications)
 }
 
 type tickMsg time.Time
@@ -94,7 +104,30 @@ func loadHistCmd(activeIDs map[string]bool) tea.Cmd {
 	return func() tea.Msg { return histMsg(loadHistory(activeIDs)) }
 }
 
-func (m model) Init() tea.Cmd { return tea.Batch(loadActiveCmd(), tickCmd(), checkUpdateCmd()) }
+func (m model) Init() tea.Cmd {
+	return tea.Batch(loadActiveCmd(), tickCmd(), checkUpdateCmd(), loadAgentsCmd())
+}
+
+// hiddenFromHistory is every session id the Historical tab leaves out: live
+// sessions, and background agents (which have their own tab).
+func (m model) hiddenFromHistory() map[string]bool {
+	ids := activeSessionIDs(m.sessions)
+	for _, a := range m.agents {
+		ids[a.SessionID] = true
+	}
+	return ids
+}
+
+// maybeLoadAgents refreshes the agent list: every tick on the Agents tab,
+// less often elsewhere.
+func (m *model) maybeLoadAgents() tea.Cmd {
+	if m.agentsBusy || (m.view != viewAgents && time.Since(m.agentsAt) < agentsPollIdle) {
+		return nil
+	}
+	m.agentsBusy = true
+	m.agentsAt = time.Now()
+	return loadAgentsCmd()
+}
 
 type updateMsg string
 

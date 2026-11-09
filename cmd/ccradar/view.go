@@ -56,10 +56,28 @@ func (m model) tabBar() string {
 		a = fmt.Sprintf(" Active (%d, +%d detached) ", open, detached)
 	}
 	h := fmt.Sprintf(" Historical (%d) ", len(m.history))
-	if m.view == viewActive {
-		return styTabOn.Render(a) + " " + styTabOff.Render(h)
+	needs := 0
+	for _, ag := range m.agents {
+		if ag.needsYou() {
+			needs++
+		}
 	}
-	return styTabOff.Render(a) + " " + styTabOn.Render(h)
+	g := fmt.Sprintf(" Agents (%d) ", len(m.agents))
+	switch {
+	case needs == 1:
+		g = fmt.Sprintf(" Agents (%d, 1 needs you) ", len(m.agents))
+	case needs > 1:
+		g = fmt.Sprintf(" Agents (%d, %d need you) ", len(m.agents), needs)
+	}
+	tabs := []string{a, h, g}
+	for i := range tabs {
+		if viewKind(i) == m.view {
+			tabs[i] = styTabOn.Render(tabs[i])
+		} else {
+			tabs[i] = styTabOff.Render(tabs[i])
+		}
+	}
+	return strings.Join(tabs, " ")
 }
 
 func (m model) View() string {
@@ -110,8 +128,14 @@ func (m model) View() string {
 
 	if len(m.rows) == 0 {
 		msg := "no live sessions"
-		if m.view != viewActive {
+		switch m.view {
+		case viewHistory:
 			msg = "no past sessions"
+		case viewAgents:
+			msg = "no background agents (start one with claude --bg)"
+			if !m.agentsLoaded {
+				msg = "loading background agents…"
+			}
 		}
 		if m.query != "" {
 			msg = "no matches for “" + m.query + "”"
@@ -172,10 +196,13 @@ func (m model) View() string {
 		help = "  type to filter · enter accept · esc clear · ↑/↓ move"
 	} else {
 		help = "  ↑/↓ move · tab switch view · enter "
-		if m.view == viewActive {
+		switch m.view {
+		case viewActive:
 			help += "focus tab · x kill detached"
-		} else {
+		case viewHistory:
 			help += "resume (new tab) · c copy cmd"
+		case viewAgents:
+			help += "attach (new tab) · c copy cmd"
 		}
 		if _, ok := m.selectedDetails().latestPR(); ok {
 			help += " · o open PR"
@@ -281,6 +308,29 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 			plain = fmt.Sprintf("%s %s  %s  %s%s  %s", sp, age, titleF, pr, mdl, loc)
 			colored = styDim.Render(plain) // detached: muted whole row
 		}
+	case rowAgent:
+		a := r.agent
+		sp, sst := agentStateText(a.State)
+		age := fmt.Sprintf("%4s", fmtAge(time.Since(a.UpdatedAt).Milliseconds()))
+		showPR := m.anyPR && cw >= prColumnMinWidth
+		tw := cw - 40
+		if showPR {
+			tw -= prColumnWidth + 2
+		}
+		if tw < 8 {
+			tw = 8
+		}
+		titleF := truncPad(firstNonEmpty(a.Name, a.ID), tw)
+		mdl := truncPad(modelShort(a.Model), 10)
+		pr, prC := "", ""
+		if showPR {
+			pr, prC = prBadge(a.sessionDetails, m.prStatus)
+			pr, prC = pr+"  ", prC+"  "
+		}
+		loc := truncPad("⇢ attach", 8)
+		plain = fmt.Sprintf("%s %s  %s  %s%s  %s", sp, age, titleF, pr, mdl, loc)
+		colored = fmt.Sprintf("%s %s  %s  %s%s  %s",
+			sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), prC, styModel.Render(mdl), styTab.Render(loc))
 	case rowHist:
 		h := r.hist
 		age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
@@ -337,6 +387,7 @@ func (m model) previewLines(w, h int) []string {
 		var title, source, dir, branch, model, status, age, prompt, reply, cost string
 		var d sessionDetails
 		var shells []bgShell
+		var agent *Agent
 		switch r := m.rows[m.cursor]; r.kind {
 		case rowSession:
 			s := r.session
@@ -345,6 +396,15 @@ func (m model) previewLines(w, h int) []string {
 			model, status, age = modelShort(s.Model), s.Status, fmtAge(nowMs()-s.UpdatedAt)
 			prompt, reply = s.LastPrompt, s.LastReply
 			shells = s.Shells
+		case rowAgent:
+			a := r.agent
+			agent, d = &a, a.sessionDetails
+			title, dir, branch = firstNonEmpty(a.Name, a.ID), dirDisplay(a.CWD), a.Branch
+			model, status, age = modelShort(a.Model), a.State, fmtAge(time.Since(a.UpdatedAt).Milliseconds())
+			reply = a.LastReply
+			if a.Result != "" {
+				reply = "" // the result says it better
+			}
 		case rowHist:
 			hh := r.hist
 			d = hh.sessionDetails
@@ -372,6 +432,18 @@ func (m model) previewLines(w, h int) []string {
 		push(line2, styDim)
 		if cost != "" {
 			push(cost, styDim)
+		}
+		if agent != nil {
+			for _, f := range []struct{ label, text string }{
+				{"▸ Needs you", agent.Needs}, {"▸ Status", agent.Detail},
+				{"▸ Result", agent.Result}, {"▸ Asked", agent.Intent},
+			} {
+				if f.text != "" {
+					segs = append(segs, seg{"", styDim})
+					push(f.label, styPrevLbl)
+					push(f.text, styPrevBody)
+				}
+			}
 		}
 		if len(shells) > 0 {
 			segs = append(segs, seg{"", styDim})

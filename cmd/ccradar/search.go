@@ -9,6 +9,9 @@ import (
 func sessionHay(s Session) string {
 	return dirDisplay(s.CWD) + " " + s.Name + " " + titleOr(s.Title) + " " + modelShort(s.Model)
 }
+func agentHay(a Agent) string {
+	return dirDisplay(a.CWD) + " " + a.Name + " " + a.Needs + " " + a.Detail + " " + modelShort(a.Model)
+}
 func histHay(h HistEntry) string {
 	return dirDisplay(h.CWD) + " " + h.Name + " " + titleOr(h.Title) + " " + modelShort(h.Model)
 }

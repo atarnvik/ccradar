@@ -410,10 +410,12 @@ func TestUnderFilter(t *testing.T) {
 }
 
 func TestPreviewRailFits(t *testing.T) {
-	for _, view := range []viewKind{viewActive, viewHistory} {
+	for _, view := range []viewKind{viewActive, viewHistory, viewAgents} {
 		m := model{preview: true, width: 120, height: 20, view: view}
 		m.sessions = demoSessions()
 		m.history = demoHistory()
+		m.agents = demoAgents()
+		m.prStatus = demoPRStatus()
 		m.rebuild()
 		out := m.View()
 		if got := renderedLines(out); got > m.height {

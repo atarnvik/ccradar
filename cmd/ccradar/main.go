@@ -79,7 +79,8 @@ Usage:
 Terminal: auto-detected from $TERM_PROGRAM (Ghostty, iTerm2, Terminal.app, Rex).
 Override with CCRADAR_TERM=ghostty|iterm|terminal|rex.
 
-Keys: ↑/↓ move · tab switch view · / search · s sort · n notify · enter focus/resume · q quit`)
+Keys: ↑/↓ move · tab/1/2/3 switch view · / search · s sort · n notify · o open PR
+      enter focus/resume/attach · q quit`)
 }
 
 func debugMode(which string) {
@@ -102,7 +103,8 @@ func debugMode(which string) {
 		return
 	}
 	// render: one frame of each view
-	m := model{sessions: sessions, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
+	m := model{sessions: sessions, agents: loadAgents(), agentsLoaded: true, preview: true, width: 120, height: 24}
+	m.history = loadHistory(m.hiddenFromHistory())
 	m.prStatus = fetchPRs(m.prLinksDue())
 	if demoMode() {
 		m.prStatus = demoPRStatus()
@@ -114,5 +116,10 @@ func debugMode(which string) {
 	m.cursor = 0
 	m.rebuild()
 	fmt.Println("\n=== HISTORICAL ===")
+	fmt.Print(m.View())
+	m.view = viewAgents
+	m.cursor = 0
+	m.rebuild()
+	fmt.Println("\n=== AGENTS ===")
 	fmt.Print(m.View())
 }

@@ -19,6 +19,12 @@ network calls are the update check and PR status lookups through your `gh`.
   than 1.3.1).
 - **Active view** — every live session, grouped by directory. `enter` focuses its
   real tab (even when it's an inactive iTerm/Ghostty split pane next to logs/git).
+- **Agents view** — your background sessions (`claude --bg`), grouped into
+  **needs you**, working and done. Each shows the question it's waiting on, its
+  latest progress line, its result once done, and the PRs it produced; `enter`
+  opens it with `claude attach` in a new tab. The tab shows how many need you,
+  and with notifications on (`n`) you get one when an agent starts waiting for
+  your reply. Reads `claude agents --json` plus each job's state file.
 - **Detached section** — live sessions with no open tab (closed tab / tmux / ssh)
   are shown separately with their pid; `x` cleans up a leftover.
 - **Historical view** — past sessions reconstructed from transcripts. `enter` opens
