@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.11.0](https://github.com/atarnvik/ccradar/compare/v0.10.0...v0.11.0) (2026-11-09)
+
+
+### Features
+
+* cleaner preview pane with ruled section headings ([#24](https://github.com/atarnvik/ccradar/issues/24)) ([737851d](https://github.com/atarnvik/ccradar/commit/737851dc4f9882253609e745cd7cfa11fbbd359c))
+* look PRs up with every logged-in gh account ([#25](https://github.com/atarnvik/ccradar/issues/25)) ([e02093f](https://github.com/atarnvik/ccradar/commit/e02093f8242b3e452f392c0d6fc774b1b583d347))
+* mark merged and closed PRs with ⑂ and × ([#26](https://github.com/atarnvik/ccradar/issues/26)) ([179a1c3](https://github.com/atarnvik/ccradar/commit/179a1c34a6e0be779d935f20cd59f03ec8f52651))
+* o opens a session's open PRs; O picks from all of them ([#29](https://github.com/atarnvik/ccradar/issues/29)) ([2ca2a91](https://github.com/atarnvik/ccradar/commit/2ca2a914422325c234cb656039d8a45a6a7dbc4f))
+* o opens all of a session's PRs; badge counts the others ([#27](https://github.com/atarnvik/ccradar/issues/27)) ([d014302](https://github.com/atarnvik/ccradar/commit/d01430216c27e9dc1e78eb31ae6311fcf4cbc61d))
+* PR badges with live status, and o to open a session's PR ([#16](https://github.com/atarnvik/ccradar/issues/16)) ([dd3cc9f](https://github.com/atarnvik/ccradar/commit/dd3cc9fd3f37a3d4557aa6baebf1051dfc593200))
+* resize the preview pane with [ and ] ([#23](https://github.com/atarnvik/ccradar/issues/23)) ([5f874b7](https://github.com/atarnvik/ccradar/commit/5f874b7df1ed752791f3e1062ddc518de37bb3fd))
+* show background shells a live session left running ([#17](https://github.com/atarnvik/ccradar/issues/17)) ([4c52d85](https://github.com/atarnvik/ccradar/commit/4c52d85eb722abc6654fc190e72f7df9fc2d373f))
+* show recaps, custom session names, and (on $) past-session cost ([#15](https://github.com/atarnvik/ccradar/issues/15)) ([b1e8f9b](https://github.com/atarnvik/ccradar/commit/b1e8f9bb8e892f6a779143a51198398bdb281b3b))
+
+
+### Bug Fixes
+
+* age live sessions by statusUpdatedAt ([#20](https://github.com/atarnvik/ccradar/issues/20)) ([1c11084](https://github.com/atarnvik/ccradar/commit/1c1108494199a942fbae28cb95401e40ef6ca530))
+* don't panic when the terminal reports zero width ([#14](https://github.com/atarnvik/ccradar/issues/14)) ([39c268f](https://github.com/atarnvik/ccradar/commit/39c268fdb21222be93d1ad344fa6fecf4584a5d0))
+
+
+### Performance
+
+* cache transcript scans and PR statuses on disk ([#30](https://github.com/atarnvik/ccradar/issues/30)) ([1ad13ad](https://github.com/atarnvik/ccradar/commit/1ad13add7b894431e58025b4804769340574c5fe))
+* cache transcript scans by size and mtime ([#21](https://github.com/atarnvik/ccradar/issues/21)) ([d009121](https://github.com/atarnvik/ccradar/commit/d009121b6893437294a1c92e121e7acdead41fbe))
+
+
+### Refactors
+
+* move sources to cmd/ccradar and split main.go ([#12](https://github.com/atarnvik/ccradar/issues/12)) ([b58ce8d](https://github.com/atarnvik/ccradar/commit/b58ce8d853e44032eb70ec4c295a5c6a7acf1f6c))
+
 ## [0.10.0](https://github.com/atarnvik/ccradar/compare/v0.9.0...v0.10.0) (2026-11-08)
 
 
