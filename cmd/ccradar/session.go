@@ -94,7 +94,7 @@ type regFile struct {
 const headlessEntrypoint = "sdk-cli"
 
 // derivedName marks a registry name Claude Code made up from the directory
-// (e.g. "yogi-de"); only names the user chose are worth showing.
+// (e.g. "my-proj"); only names the user chose are worth showing.
 const derivedName = "derived"
 
 // pidAlive reports whether the process exists (EPERM still means it's there).

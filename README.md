@@ -64,7 +64,7 @@ network calls are the update check and PR status lookups through your `gh`.
   (`s`) between last-active (the default) and alphabetical; the choice is
   remembered.
 - **Find a session from a loose description** (`?`): describe it the way you
-  remember it ("the one where the evals broke on social tools") and Claude picks
+  remember it ("the one where the evals broke on search tools") and Claude picks
   the matching past sessions, best first, each with a one-line reason. It sends
   only a compact catalog of recent sessions (directory, age, branch, title, a few
   of your prompts) — never full transcripts — to a fast model (`haiku`; override
