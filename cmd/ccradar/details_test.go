@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 var detailsTranscript = []string{
@@ -86,5 +88,27 @@ func TestFindCatalogIncludesRecap(t *testing.T) {
 	}})
 	if !strings.Contains(catalog, "| Pin bump |") || !strings.Contains(catalog, `| recap: "PR #12 is open"`) {
 		t.Fatalf("catalog = %q", catalog)
+	}
+}
+
+func TestCostHiddenUntilToggled(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	m := model{view: viewHistory, preview: true, width: 120, height: 20}
+	m.history = []HistEntry{{SessionID: "a", CWD: "/w", Title: "Fix it", ModAt: time.Now(),
+		sessionDetails: sessionDetails{Cost: costState{USD: 7.91, LinesAdded: 3}}}}
+	m.rebuild()
+	if strings.Contains(m.View(), "$7.91") {
+		t.Fatal("cost shown by default")
+	}
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("$")})
+	m = tm.(model)
+	if !m.showCost || !strings.Contains(m.View(), "$7.91") {
+		t.Fatal("$ should show the cost")
+	}
+	if !loadConfig().Cost {
+		t.Error("cost preference not saved")
+	}
+	if strings.Contains(m.View(), "$ ") || strings.Contains(m.View(), "cost:") {
+		t.Error("the toggle should stay out of the help line")
 	}
 }
