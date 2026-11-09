@@ -243,24 +243,18 @@ func onOff(b bool) string {
 }
 
 // prLinksDue lists the PRs of every loaded session whose status should be
-// (re)fetched. Only each session's few most recent PRs are tracked, which is
-// all the list and preview show.
+// (re)fetched. All of a session's PRs are tracked: o needs to know which are
+// open, and the picker lists them all. Merged and closed PRs are fetched once.
 func (m model) prLinksDue() []prLink {
 	if !prStatusEnabled() {
 		return nil
 	}
 	var links []prLink
-	add := func(prs []prLink) {
-		if len(prs) > prPreviewMax {
-			prs = prs[len(prs)-prPreviewMax:]
-		}
-		links = append(links, prs...)
-	}
 	for _, s := range m.sessions {
-		add(s.PRs)
+		links = append(links, s.PRs...)
 	}
 	for _, h := range m.history {
-		add(h.PRs)
+		links = append(links, h.PRs...)
 	}
 	return duePRs(links, m.prStatus, time.Now())
 }

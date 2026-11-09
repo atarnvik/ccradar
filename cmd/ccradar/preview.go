@@ -150,7 +150,7 @@ func (m model) previewLines(w, h int) []string {
 			b.lines = append(b.lines, prPreviewLine(d.PRs[i], m.prStatus[d.PRs[i].URL], numW, w))
 		}
 		if first > 0 {
-			b.add(fmt.Sprintf("+%d older · o opens all %d", first, len(d.PRs)), styDim)
+			b.add(fmt.Sprintf("+%d older · O to pick from all %d", first, len(d.PRs)), styDim)
 		}
 	}
 	if len(shells) > 0 {

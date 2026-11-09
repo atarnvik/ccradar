@@ -75,6 +75,9 @@ type model struct {
 	flash    string
 	pendingKill int // pid armed for kill confirmation (0 = none)
 	pendingOpen string // session armed to open many PRs (its latest PR URL; "" = none)
+	picking     bool     // the PR picker (O) is open
+	pickPRs     []prLink // the picker's PRs, newest first
+	pickCursor  int
 	prStatus   map[string]prInfo // PR URL → live status from gh
 	prBusy     bool              // a PR status lookup is in flight
 	anyPR      bool              // some row in the current list has a PR (shows the PR column)

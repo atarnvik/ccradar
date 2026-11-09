@@ -315,8 +315,7 @@ func parsePRResponse(out []byte, aliases map[string]string) map[string]prInfo {
 	return got
 }
 
-// prPreviewMax is how many of a session's latest PRs the preview lists (and
-// have their status looked up).
+// prPreviewMax is how many of a session's latest PRs the preview lists.
 const prPreviewMax = 5
 
 // prOpenConfirmAbove is how many PRs `o` opens without asking first.
