@@ -1,5 +1,6 @@
-# built binary (go install / go build -o ccradar)
+# built binary (go install / go build -o ccradar, or `go build` inside cmd/ccradar)
 /ccradar
+/cmd/ccradar/ccradar
 
 # goreleaser output
 /dist/
