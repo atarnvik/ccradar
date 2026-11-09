@@ -131,6 +131,7 @@ type transcriptMeta struct {
 	last                                     time.Time // newest top-level record timestamp
 	continued                                bool      // a continued-in record: this session was forked into another
 	details                                  sessionDetails
+	shells                                   shellTracker
 }
 
 // How many of a session's opening and latest prompts transcriptMeta keeps.
@@ -198,6 +199,7 @@ func scanTranscript(path string) transcriptMeta {
 			}
 		}
 		tm.details.scanDetails(line)
+		tm.shells.scan(line)
 		if t, ok := scanTitle(line); ok {
 			tm.title = t
 		}

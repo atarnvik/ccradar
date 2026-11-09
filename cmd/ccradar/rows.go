@@ -107,12 +107,10 @@ func (m *model) rebuild() {
 		}
 	}
 	m.rows = rows
-	m.anyPR = false
+	m.anyPR, m.anyShell = false, false
 	for _, r := range rows {
-		if len(r.details().PRs) > 0 {
-			m.anyPR = true
-			break
-		}
+		m.anyPR = m.anyPR || len(r.details().PRs) > 0
+		m.anyShell = m.anyShell || (r.kind == rowSession && len(r.session.Shells) > 0)
 	}
 	m.clampCursor()
 }
