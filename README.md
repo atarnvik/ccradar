@@ -59,7 +59,7 @@ brew install atarnvik/tap/ccradar
 **Go:**
 
 ```sh
-go install github.com/atarnvik/ccradar@latest
+go install github.com/atarnvik/ccradar/cmd/ccradar@latest
 ```
 
 Then:
@@ -76,7 +76,7 @@ Or build from source:
 ```sh
 git clone https://github.com/atarnvik/ccradar.git
 cd ccradar
-go build -o ccradar . && ./ccradar
+go build -o ccradar ./cmd/ccradar && ./ccradar
 ```
 
 ## Requirements
@@ -123,7 +123,7 @@ go build -o ccradar . && ./ccradar
 | `ps -o tty=` | the session process's controlling tty |
 | `osascript` → your terminal | enumerate surfaces, focus / open tabs |
 
-Each terminal has a small driver (`ghostty.go`, `iterm.go`, `terminal.go`, `rex.go`) behind
+Each terminal has a small driver (`cmd/ccradar/term_*.go`) behind
 a common interface. A session is paired to a surface **exactly by tty** on
 iTerm2/Terminal.app (`ps` gives the pid's tty; the terminal reports each
 tab/session's tty). On Ghostty 1.3.1, which doesn't expose a tty, it falls back

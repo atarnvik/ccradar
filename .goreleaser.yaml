@@ -7,7 +7,7 @@ before:
 
 builds:
   - id: ccradar
-    main: .
+    main: ./cmd/ccradar
     binary: ccradar
     env:
       - CGO_ENABLED=0

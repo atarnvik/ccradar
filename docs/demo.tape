@@ -11,7 +11,7 @@ Set TypingSpeed 70ms
 
 # Build the demo binary off-camera.
 Hide
-Type "mkdir -p /tmp/ccdemo && go build -o /tmp/ccdemo/ccradar . && export PATH=/tmp/ccdemo:$PATH && export CCRADAR_DEMO=1 && clear"
+Type "mkdir -p /tmp/ccdemo && go build -o /tmp/ccdemo/ccradar ./cmd/ccradar && export PATH=/tmp/ccdemo:$PATH && export CCRADAR_DEMO=1 && clear"
 Enter
 Sleep 6s
 Show
