@@ -124,7 +124,8 @@ func TestPRBadgeAndPreviewLine(t *testing.T) {
 		"passing": {prInfo{State: "OPEN", Checks: "SUCCESS", Title: "Social topics"}, "#5691 ✓", "#5691 ✓ Social topics"},
 		"failing": {prInfo{State: "OPEN", Checks: "FAILURE", Title: "Social topics"}, "#5691 ✗", "#5691 ✗ Social topics"},
 		"draft":   {prInfo{State: "OPEN", Draft: true, Checks: "PENDING", Title: "Social topics"}, "#5691 •", "#5691 • Social topics"},
-		"merged":  {prInfo{State: "MERGED", Checks: "SUCCESS"}, "#5691  ", "#5691   merged"},
+		"merged":  {prInfo{State: "MERGED", Checks: "SUCCESS", Title: "Social topics"}, "#5691 ⑂", "#5691 ⑂ Social topics"},
+		"closed":  {prInfo{State: "CLOSED", Checks: "FAILURE"}, "#5691 ×", "#5691 × closed"},
 	}
 	for name, c := range cases {
 		plain, colored := prBadge(d, map[string]prInfo{"u": c.info})

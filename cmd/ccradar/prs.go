@@ -322,7 +322,7 @@ const prPreviewMax = 3
 const prColumnWidth = 7
 
 // prBadge renders a row's PR column (exactly prColumnWidth cells): the number,
-// colored by state, and for open PRs a checks glyph.
+// colored by state, and a state glyph (see stateGlyph).
 func prBadge(d sessionDetails, status map[string]prInfo) (plain, colored string) {
 	l, ok := d.latestPR()
 	if !ok {
@@ -331,13 +331,27 @@ func prBadge(d sessionDetails, status map[string]prInfo) (plain, colored string)
 	}
 	num := truncPad(fmt.Sprintf("#%d", l.Number), prColumnWidth-1)
 	info := status[l.URL]
-	glyph, gs := checksGlyph(info)
+	glyph, gs := stateGlyph(info)
 	return num + glyph, prStyle(info).Render(num) + gs.Render(glyph)
 }
 
-// checksGlyph is the one-cell CI summary shown after an open PR's number.
-func checksGlyph(info prInfo) (string, lipgloss.Style) {
-	if info.State != "OPEN" {
+// Glyphs for PRs that are no longer open. ⑂ stands in for GitHub's merge
+// icon, which only exists in Nerd Fonts.
+const (
+	prMergedGlyph = "⑂"
+	prClosedGlyph = "×"
+)
+
+// stateGlyph is the one-cell marker after a PR's number: CI status for an
+// open PR (✓ passing, ✗ failing, • running), ⑂ merged, × closed.
+func stateGlyph(info prInfo) (string, lipgloss.Style) {
+	switch info.State {
+	case "MERGED":
+		return prMergedGlyph, styPRMerged
+	case "CLOSED":
+		return prClosedGlyph, styPRClosed
+	case "OPEN":
+	default:
 		return " ", styDim
 	}
 	switch info.Checks {
