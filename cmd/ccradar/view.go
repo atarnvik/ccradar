@@ -179,6 +179,9 @@ func (m model) View() string {
 		} else {
 			help += "resume (new tab) · c copy cmd"
 		}
+		if _, ok := m.selectedDetails().latestPR(); ok {
+			help += " · o open PR"
+		}
 		help += " · / search · ? find · s sort:" + m.sortLabel() + " · p preview:" + onOff(m.preview) + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
 	b.WriteString(styHelp.Render(trunc(help, m.width)))
@@ -229,8 +232,12 @@ func (m model) renderListLine(i, cw int) string {
 	return padVis("    "+colored, 4+len([]rune(plain)), cw)
 }
 
-// costColumnMinWidth is the narrowest list that still gets a cost column.
-const costColumnMinWidth = 70
+// costColumnMinWidth / prColumnMinWidth are the narrowest lists that still get
+// a cost / PR column.
+const (
+	costColumnMinWidth = 70
+	prColumnMinWidth   = 70
+)
 
 // rowColumns builds the aligned columns for a session/history row. The title
 // column flexes so the plain text is exactly cw-4 cells wide (the 4 is the row's
@@ -241,29 +248,42 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 		s := r.session
 		sp, sst := statusText(s.Status)
 		age := fmt.Sprintf("%4s", fmtAge(nowMs()-s.UpdatedAt))
+		showPR := m.anyPR && cw >= prColumnMinWidth
 		tw := cw - 40
+		if showPR {
+			tw -= prColumnWidth + 2
+		}
 		if tw < 8 {
 			tw = 8
 		}
 		titleF := truncPad(displayTitle(s.sessionDetails, s.Title), tw)
 		mdl := truncPad(modelShort(s.Model), 10)
+		pr, prC := "", ""
+		if showPR {
+			pr, prC = prBadge(s.sessionDetails, m.prStatus)
+			pr, prC = pr+"  ", prC+"  "
+		}
 		if s.SurfaceID != "" {
 			loc := truncPad("→ tab", 8)
-			plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
-			colored = fmt.Sprintf("%s %s  %s  %s  %s",
-				sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(loc))
+			plain = fmt.Sprintf("%s %s  %s  %s%s  %s", sp, age, titleF, pr, mdl, loc)
+			colored = fmt.Sprintf("%s %s  %s  %s%s  %s",
+				sst.Render(sp), styDim.Render(age), styTitle.Render(titleF), prC, styModel.Render(mdl), styTab.Render(loc))
 		} else {
 			loc := truncPad(fmt.Sprintf("pid %d", s.PID), 8)
-			plain = fmt.Sprintf("%s %s  %s  %s  %s", sp, age, titleF, mdl, loc)
+			plain = fmt.Sprintf("%s %s  %s  %s%s  %s", sp, age, titleF, pr, mdl, loc)
 			colored = styDim.Render(plain) // detached: muted whole row
 		}
 	case rowHist:
 		h := r.hist
 		age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
 		showCost := m.showCost && cw >= costColumnMinWidth
+		showPR := m.anyPR && cw >= prColumnMinWidth
 		tw := cw - 32
 		if showCost {
 			tw -= 7 // "$0.00" + 2 spaces
+		}
+		if showPR {
+			tw -= prColumnWidth + 2
 		}
 		if tw < 8 {
 			tw = 8
@@ -271,19 +291,22 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 		titleF := truncPad(displayTitle(h.sessionDetails, h.Title), tw)
 		mdl := truncPad(modelShort(h.Model), 10)
 		resume := truncPad("↻ resume", 8)
-		plain = fmt.Sprintf("%s  %s  %s  %s", age, titleF, mdl, resume)
-		colored = fmt.Sprintf("%s  %s  %s  %s",
-			styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(resume))
+		cost, costC := "", ""
 		if showCost {
-			cost := ""
 			if h.Cost.known() {
 				cost = fmtCost(h.Cost.USD)
 			}
 			cost = fmt.Sprintf("%5s", cost)
-			plain = fmt.Sprintf("%s  %s  %s  %s  %s", age, titleF, cost, mdl, resume)
-			colored = fmt.Sprintf("%s  %s  %s  %s  %s",
-				styDim.Render(age), styTitle.Render(titleF), styDim.Render(cost), styModel.Render(mdl), styTab.Render(resume))
+			cost, costC = cost+"  ", styDim.Render(cost)+"  "
 		}
+		pr, prC := "", ""
+		if showPR {
+			pr, prC = prBadge(h.sessionDetails, m.prStatus)
+			pr, prC = pr+"  ", prC+"  "
+		}
+		plain = fmt.Sprintf("%s  %s  %s%s%s  %s", age, titleF, cost, pr, mdl, resume)
+		colored = fmt.Sprintf("%s  %s  %s%s%s  %s",
+			styDim.Render(age), styTitle.Render(titleF), costC, prC, styModel.Render(mdl), styTab.Render(resume))
 	}
 	return plain, colored
 }
@@ -341,6 +364,17 @@ func (m model) previewLines(w, h int) []string {
 		push(line2, styDim)
 		if cost != "" {
 			push(cost, styDim)
+		}
+		if len(d.PRs) > 0 {
+			segs = append(segs, seg{"", styDim})
+			push("▸ PRs · o opens the latest", styPrevLbl)
+			for i := len(d.PRs) - 1; i >= 0 && i >= len(d.PRs)-prPreviewMax; i-- {
+				info := m.prStatus[d.PRs[i].URL]
+				push(prSummary(d.PRs[i], info), prStyle(info))
+				if info.Title != "" {
+					push(info.Title, styPrevBody)
+				}
+			}
 		}
 		if why := m.selectedWhy(); why != "" {
 			segs = append(segs, seg{"", styDim})
@@ -469,4 +503,12 @@ func (m model) findLine() string {
 		info = trunc(info, m.width-len([]rune(q)))
 	}
 	return stySearch.Render(q) + styHelp.Render(info)
+}
+
+// selectedDetails is the selected row's session details (zero if none).
+func (m model) selectedDetails() sessionDetails {
+	if m.cursor >= len(m.rows) {
+		return sessionDetails{}
+	}
+	return m.rows[m.cursor].details()
 }

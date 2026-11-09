@@ -56,7 +56,11 @@ func main() {
 	if popupMode {
 		cfg.Notify = false // a short-lived popup shouldn't duplicate a long-running ccradar's notifications
 	}
-	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost}, tea.WithAltScreen()).Run(); err != nil {
+	m := model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost}
+	if demoMode() {
+		m.prStatus = demoPRStatus()
+	}
+	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -99,6 +103,10 @@ func debugMode(which string) {
 	}
 	// render: one frame of each view
 	m := model{sessions: sessions, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
+	m.prStatus = fetchPRs(m.prLinksDue())
+	if demoMode() {
+		m.prStatus = demoPRStatus()
+	}
 	m.rebuild()
 	fmt.Println("=== ACTIVE ===")
 	fmt.Print(m.View())

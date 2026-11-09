@@ -15,6 +15,7 @@ type sessionDetails struct {
 	Recap   string    // Claude's latest "while you were away" summary
 	RecapAt time.Time // when that recap was written
 	Cost    costState // totals as of the session's last exit (zero if never recorded)
+	PRs     []prLink  // pull requests the session opened or touched, most recent last
 }
 
 // costState is the last cost-state record. Claude Code writes it when a session
@@ -52,6 +53,8 @@ func (d *sessionDetails) scanDetails(line []byte) {
 		if json.Unmarshal(line, &r) == nil && r.Type == "agent-name" && r.Name != "" {
 			d.Name = r.Name
 		}
+	case bytes.Contains(line, []byte(`"type":"pr-link"`)):
+		d.scanPRLink(line)
 	case bytes.Contains(line, []byte(`"type":"cost-state"`)):
 		var r struct {
 			Type string `json:"type"`
