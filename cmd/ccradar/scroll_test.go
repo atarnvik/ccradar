@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -485,5 +486,78 @@ func TestZeroWidthDoesNotPanic(t *testing.T) {
 		m.history = demoHistory()
 		m.rebuild()
 		_ = m.View()
+	}
+}
+
+func TestRailWidthDefaultsAndClamps(t *testing.T) {
+	cases := []struct{ width, chosen, want int }{
+		{100, 0, 38},   // narrow terminal: the fixed default
+		{150, 0, 50},   // wide terminal: a third
+		{240, 0, 80},   //
+		{120, 200, 58}, // too wide for the terminal: list keeps 59 cols
+		{120, 10, 28},  // too narrow: rail minimum
+		{160, 52, 52},  // a chosen width that fits is kept
+	}
+	for _, c := range cases {
+		m := model{width: c.width, railW: c.chosen}
+		if got := m.railWidth(); got != c.want {
+			t.Errorf("width %d, chosen %d: rail = %d, want %d", c.width, c.chosen, got, c.want)
+		}
+	}
+}
+
+func TestResizeRailKeys(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	m := model{preview: true, width: 120, height: 20}
+	m.sessions = demoSessions()
+	m.rebuild()
+	press := func(k string) {
+		tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+		m = tm.(model)
+	}
+	press("[")
+	if m.railWidth() != 44 || m.flash != "preview 44 cols" {
+		t.Fatalf("[ → rail %d (%q), want 44", m.railWidth(), m.flash)
+	}
+	if loadConfig().RailW != 44 {
+		t.Error("width not saved")
+	}
+	for i := 0; i < 20; i++ {
+		press("]")
+	}
+	if m.railWidth() != railMinWidth || !strings.Contains(m.flash, "narrowest") {
+		t.Fatalf("after many ] → rail %d (%q)", m.railWidth(), m.flash)
+	}
+	press("[") // moves from the visible (clamped) width, not a runaway value
+	if m.railWidth() != railMinWidth+railStep {
+		t.Fatalf("[ after clamping → %d, want %d", m.railWidth(), railMinWidth+railStep)
+	}
+
+	m.preview = false
+	press("[")
+	if !strings.Contains(m.flash, "press p") || m.railW != railMinWidth+railStep {
+		t.Errorf("resize with the preview off should only hint: %q, railW %d", m.flash, m.railW)
+	}
+}
+
+func TestResizedRailNeverOverflows(t *testing.T) {
+	for _, width := range []int{100, 120, 180} {
+		for _, chosen := range []int{0, 1, 50, 500} {
+			for _, view := range []viewKind{viewActive, viewHistory} {
+				m := model{preview: true, width: width, height: 20, view: view, railW: chosen}
+				m.sessions = demoSessions()
+				m.history = demoHistory()
+				m.rebuild()
+				out := m.View()
+				if got := renderedLines(out); got > m.height {
+					t.Fatalf("w=%d rail=%d view=%d: %d lines > %d", width, chosen, view, got, m.height)
+				}
+				for _, ln := range strings.Split(out, "\n") {
+					if w := lipgloss.Width(ln); w > width {
+						t.Fatalf("w=%d rail=%d view=%d: line %d cols wide", width, chosen, view, w)
+					}
+				}
+			}
+		}
 	}
 }

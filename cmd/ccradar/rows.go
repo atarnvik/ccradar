@@ -229,9 +229,10 @@ func parseSort(label string) sortMode {
 	return sortRecent
 }
 
-// savePrefs persists the toggleable preferences (notify, preview, sort, cost).
+// savePrefs persists the toggleable preferences (notify, preview, sort, cost,
+// preview width).
 func (m model) savePrefs() {
-	saveConfig(config{Notify: m.notify, Preview: m.preview, Sort: m.sortLabel(), Cost: m.showCost})
+	saveConfig(config{Notify: m.notify, Preview: m.preview, Sort: m.sortLabel(), Cost: m.showCost, RailW: m.railW})
 }
 
 func onOff(b bool) string {

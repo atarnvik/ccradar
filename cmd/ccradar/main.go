@@ -56,7 +56,7 @@ func main() {
 	if popupMode {
 		cfg.Notify = false // a short-lived popup shouldn't duplicate a long-running ccradar's notifications
 	}
-	m := model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost}
+	m := model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost, railW: cfg.RailW}
 	if demoMode() {
 		m.prStatus = demoPRStatus()
 	}

@@ -139,6 +139,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.preview = !m.preview
 			m.savePrefs()
 			m.flash = "preview " + onOff(m.preview)
+			if m.preview {
+				m.flash += " · [ ] to resize"
+			}
+		case "[": // lean left: the divider moves left, the preview grows
+			m.resizeRail(railStep)
+		case "]":
+			m.resizeRail(-railStep)
 		case "$": // deliberately left out of the help line
 			m.showCost = !m.showCost
 			m.savePrefs()
