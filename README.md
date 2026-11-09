@@ -70,8 +70,10 @@ network calls are the update check and PR status lookups through your `gh`.
   of your prompts) — never full transcripts — to a fast model (`haiku`; override
   with `CCRADAR_FIND_MODEL`) via headless `claude -p`, so it uses your existing
   Claude Code login. Each lookup takes a few seconds and isn't saved to history.
-- Each row shows the **model** in use; live auto-refresh, status/age at a glance,
-  directory grouping.
+- Live auto-refresh, status/age at a glance (sessions **waiting** on you stand
+  out, and the tab bar counts them), and directory grouping, with worktrees shown
+  as `repo ⎇ name`. A row shows its **model** only when it differs from the
+  one most of the list uses; the preview always shows it.
 - **Update check** — on launch ccradar checks GitHub for the latest release and,
   if newer, shows `⬆ vX.Y.Z` plus the right upgrade command for how you installed
   (`brew upgrade` vs `go install`). Best-effort and disableable with
