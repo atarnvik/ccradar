@@ -42,6 +42,7 @@ type config struct {
 	Notify  bool   `json:"notify"`
 	Preview bool   `json:"preview"`
 	Sort    string `json:"sort"` // "recent" or "alpha"
+	Cost    bool   `json:"cost"` // show session cost (toggled with $)
 }
 
 func configPath() string {

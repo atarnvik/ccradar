@@ -274,7 +274,7 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 	case rowHist:
 		h := r.hist
 		age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
-		showCost := cw >= costColumnMinWidth
+		showCost := m.showCost && cw >= costColumnMinWidth
 		showPR := m.anyPR && cw >= prColumnMinWidth
 		tw := cw - 32
 		if showCost {
@@ -339,7 +339,9 @@ func (m model) previewLines(w, h int) []string {
 			title, dir, branch = displayTitle(d, hh.Title), dirDisplay(hh.CWD), hh.Branch
 			model, age = modelShort(hh.Model), fmtAge(time.Since(hh.ModAt).Milliseconds())
 			prompt, reply = hh.LastPrompt, hh.LastReply
-			cost = costLine(d.Cost) // a live session's cost-state is from an earlier run
+			if m.showCost {
+				cost = costLine(d.Cost) // a live session's cost-state is from an earlier run
+			}
 		}
 		push(title, styPrevTtl)
 		if source != "" {

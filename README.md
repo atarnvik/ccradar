@@ -29,9 +29,9 @@ network calls are the update check and PR status lookups through your `gh`.
   the session stands (the "while you were away" summary), and its last prompt +
   last reply, so you can tell sessions apart at a glance. Auto-hidden on narrow
   terminals.
-- **Cost per past session** — the Historical view shows what each session cost
-  (and the preview its lines added/removed), from the totals Claude Code records
-  when a session exits.
+- **Cost per past session** (off by default; press `$` to toggle) — the
+  Historical view shows what each session cost (and the preview its lines
+  added/removed), from the totals Claude Code records when a session exits.
 - **PR badges** — every session that opened or worked on a pull request shows
   its latest PR number, colored by state (open / draft / merged / closed) with a
   CI glyph for open ones (✓ passing, ✗ failing, • running). The preview lists
