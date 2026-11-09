@@ -34,7 +34,9 @@ func titleOr(t string) string {
 }
 
 // truncPad truncates or space-pads s to exactly n display cells (rune-based).
+// A negative n (a terminal too narrow for the layout) is treated as 0.
 func truncPad(s string, n int) string {
+	n = max(n, 0)
 	r := []rune(s)
 	if len(r) > n {
 		return string(r[:n])
