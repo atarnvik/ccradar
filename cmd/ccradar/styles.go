@@ -24,4 +24,7 @@ var (
 	styStatus   = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 	styTabOn    = lipgloss.NewStyle().Background(lipgloss.Color("44")).Foreground(lipgloss.Color("16")).Bold(true)
 	styTabOff   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	styPROpen   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	styPRMerged = lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
+	styPRClosed = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
 )

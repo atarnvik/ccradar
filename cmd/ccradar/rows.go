@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func dirDisplay(cwd string) string {
@@ -105,6 +107,13 @@ func (m *model) rebuild() {
 		}
 	}
 	m.rows = rows
+	m.anyPR = false
+	for _, r := range rows {
+		if len(r.details().PRs) > 0 {
+			m.anyPR = true
+			break
+		}
+	}
 	m.clampCursor()
 }
 
@@ -232,4 +241,40 @@ func onOff(b bool) string {
 		return "on"
 	}
 	return "off"
+}
+
+// prLinksDue lists the PRs of every loaded session whose status should be
+// (re)fetched. Only each session's few most recent PRs are tracked, which is
+// all the list and preview show.
+func (m model) prLinksDue() []prLink {
+	if !prStatusEnabled() {
+		return nil
+	}
+	var links []prLink
+	add := func(prs []prLink) {
+		if len(prs) > prPreviewMax {
+			prs = prs[len(prs)-prPreviewMax:]
+		}
+		links = append(links, prs...)
+	}
+	for _, s := range m.sessions {
+		add(s.PRs)
+	}
+	for _, h := range m.history {
+		add(h.PRs)
+	}
+	return duePRs(links, m.prStatus, time.Now())
+}
+
+// maybeFetchPRs starts a PR status lookup when one is due and none is running.
+func (m *model) maybeFetchPRs() tea.Cmd {
+	if m.prBusy {
+		return nil
+	}
+	due := m.prLinksDue()
+	if len(due) == 0 {
+		return nil
+	}
+	m.prBusy = true
+	return prStatusCmd(due)
 }
