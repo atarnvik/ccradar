@@ -82,6 +82,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() != "x" {
 			m.pendingKill = 0 // any other key cancels a pending kill
 		}
+		if msg.String() != "o" {
+			m.pendingOpen = "" // …or a pending open of many PRs
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -162,7 +165,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			m.copyResume()
 		case "o":
-			m.openPR()
+			m.openPRs()
 		case "x":
 			m.killSelected()
 		}
@@ -370,16 +373,33 @@ func (m *model) copyResume() {
 	}
 }
 
-// openPR opens the selected session's most recent PR in the browser.
-func (m *model) openPR() {
-	l, ok := m.selectedDetails().latestPR()
+// openPRs opens every PR of the selected session in the browser, one tab
+// each, oldest first so the latest ends up in front. Past
+// prOpenConfirmAbove PRs, the first press asks and the second opens.
+func (m *model) openPRs() {
+	d := m.selectedDetails()
+	latest, ok := d.latestPR()
 	if !ok {
 		m.flash = "no PR for this session"
 		return
 	}
-	if err := openURL(l.URL); err != nil {
-		m.flash = "couldn't open PR: " + err.Error()
+	if n := len(d.PRs); n > prOpenConfirmAbove && m.pendingOpen != latest.URL {
+		m.pendingOpen = latest.URL
+		m.flash = fmt.Sprintf("press o again to open all %d PRs", n)
 		return
 	}
-	m.flash = fmt.Sprintf("opened PR #%d", l.Number)
+	m.pendingOpen = ""
+	urls := make([]string, len(d.PRs))
+	for i, l := range d.PRs {
+		urls[i] = l.URL
+	}
+	if err := openURLs(urls...); err != nil {
+		m.flash = "couldn't open PRs: " + err.Error()
+		return
+	}
+	if len(urls) == 1 {
+		m.flash = fmt.Sprintf("opened PR #%d", latest.Number)
+	} else {
+		m.flash = fmt.Sprintf("opened %d PRs", len(urls))
+	}
 }
