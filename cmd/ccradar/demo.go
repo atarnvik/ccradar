@@ -36,6 +36,10 @@ func demoSessions() []Session {
 		}
 		return s
 	}
+	waitingRecap := sessionDetails{
+		Recap:   "AuthContext is split; ProfileContext holds the user profile. Next: update the 12 consumers, then drop the old context.",
+		RecapAt: time.Now().Add(-4 * time.Minute),
+	}
 	local := []Session{
 		mk("src/api-gateway", "busy", "Add rate-limiting middleware", "claude-opus-4-8", "main",
 			"add a per-IP token-bucket limiter to the gateway middleware",
@@ -55,6 +59,11 @@ func demoSessions() []Session {
 		mk("src/cli-tool", "idle", "Port flags to cobra", "claude-opus-4-8", "main",
 			"port the hand-rolled flag parsing over to cobra",
 			"Migrated the root command and three subcommands to cobra; flag names and defaults are unchanged.", 3*hr, false), // detached
+	}
+	for i := range local {
+		if local[i].Status == "waiting" {
+			local[i].sessionDetails = waitingRecap
+		}
 	}
 	// A devcontainer source (shows as its own section).
 	mkr := func(cwd, status, title, model, branch, prompt string, age int64) Session {
@@ -81,6 +90,7 @@ func demoHistory() []HistEntry {
 			Branch: "main", LastPrompt: prompt, LastReply: reply, ModAt: now.Add(-age),
 		}
 	}
+	costs := []costState{{4.12, 214, 18}, {11.6, 37, 4}, {0.84, 61, 0}, {2.3, 0, 0}}
 	list := []HistEntry{
 		mk("src/web-app", "Set up Vitest and React Testing Library", "claude-sonnet-4-6",
 			"set up vitest with react testing library",
@@ -95,6 +105,11 @@ func demoHistory() []HistEntry {
 			"draft an outline for the Q3 planning doc",
 			"Drafted an outline: goals, bets, staffing, risks, and a rough timeline.", 50*time.Hour),
 	}
+	for i := range list {
+		list[i].Cost = costs[i%len(costs)]
+	}
+	list[1].Recap = "Settled on an outbox table plus a backoff worker; the dead-letter queue and its alerting are still to do."
+	list[1].RecapAt = now.Add(-5 * time.Hour)
 	list = append(list,
 		HistEntry{
 			SessionID: "demo-c-hist", CWD: "/workspaces/orders-svc", Title: "Add OpenTelemetry spans",

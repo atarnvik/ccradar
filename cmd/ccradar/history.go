@@ -25,6 +25,7 @@ type HistEntry struct {
 	ModAt      time.Time // last activity: newest record timestamp (file mtime as fallback)
 	Source     string    // source label ("" = local; else a --docker container)
 	Container  string    // resolved docker container id ("" = local)
+	sessionDetails
 }
 
 // histScanLimit caps how many recent transcripts we parse, so a big history
@@ -109,7 +110,7 @@ func localHistory(activeIDs map[string]bool) []HistEntry {
 		out = append(out, HistEntry{
 			SessionID: sid, CWD: tm.cwd, Title: tm.title, Model: tm.model,
 			Branch: tm.branch, LastPrompt: tm.prompt, LastReply: tm.reply,
-			Prompts: tm.prompts, ModAt: modAt,
+			Prompts: tm.prompts, ModAt: modAt, sessionDetails: tm.details,
 		})
 	}
 
@@ -129,6 +130,7 @@ type transcriptMeta struct {
 	prompts                                  []string  // distinct user prompts: the first few and the latest few
 	last                                     time.Time // newest top-level record timestamp
 	continued                                bool      // a continued-in record: this session was forked into another
+	details                                  sessionDetails
 }
 
 // How many of a session's opening and latest prompts transcriptMeta keeps.
@@ -195,6 +197,7 @@ func scanTranscript(path string) transcriptMeta {
 				tm.continued = true
 			}
 		}
+		tm.details.scanDetails(line)
 		if t, ok := scanTitle(line); ok {
 			tm.title = t
 		}

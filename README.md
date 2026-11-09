@@ -24,8 +24,15 @@ data and drives your terminal through its AppleScript API. No daemon, no network
   a new tab and runs `claude --resume <id>` in the original directory; `c` copies
   the command instead.
 - **Preview pane** — a right rail (off by default; press `p`) showing the selected
-  session's directory, git branch, model/status, and its last prompt + last reply,
-  so you can tell sessions apart at a glance. Auto-hidden on narrow terminals.
+  session's directory, git branch, model/status, Claude's latest **recap** of where
+  the session stands (the "while you were away" summary), and its last prompt +
+  last reply, so you can tell sessions apart at a glance. Auto-hidden on narrow
+  terminals.
+- **Cost per past session** — the Historical view shows what each session cost
+  (and the preview its lines added/removed), from the totals Claude Code records
+  when a session exits.
+- **Your session names win** — a name you gave a session is shown instead of the
+  auto-generated title (both are searchable).
 - **Notifications** — get a native macOS notification the moment a session leaves
   **busy** — either finishing (**idle**) or pausing for your input (**waiting**).
   **Click the notification to jump straight to that session's tab.** Toggle with

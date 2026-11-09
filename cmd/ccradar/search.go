@@ -7,10 +7,10 @@ import (
 // sessionHay / histHay are the searchable text for a row: directory + title +
 // model, so a query can match the folder, the session name, or the model.
 func sessionHay(s Session) string {
-	return dirDisplay(s.CWD) + " " + titleOr(s.Title) + " " + modelShort(s.Model)
+	return dirDisplay(s.CWD) + " " + s.Name + " " + titleOr(s.Title) + " " + modelShort(s.Model)
 }
 func histHay(h HistEntry) string {
-	return dirDisplay(h.CWD) + " " + titleOr(h.Title) + " " + modelShort(h.Model)
+	return dirDisplay(h.CWD) + " " + h.Name + " " + titleOr(h.Title) + " " + modelShort(h.Model)
 }
 
 // fuzzyMatch reports whether every whitespace-separated token of query is a
