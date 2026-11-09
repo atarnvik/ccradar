@@ -150,7 +150,7 @@ func (m model) sortSessions(ss []Session) {
 			if ss[i].CWD != ss[j].CWD {
 				return ss[i].CWD < ss[j].CWD
 			}
-			ti, tj := strings.ToLower(titleOr(ss[i].Title)), strings.ToLower(titleOr(ss[j].Title))
+			ti, tj := strings.ToLower(displayTitle(ss[i].sessionDetails, ss[i].Title)), strings.ToLower(displayTitle(ss[j].sessionDetails, ss[j].Title))
 			if ti != tj {
 				return ti < tj
 			}
@@ -182,7 +182,7 @@ func (m model) sortHistory(hs []HistEntry) {
 			if hs[i].CWD != hs[j].CWD {
 				return hs[i].CWD < hs[j].CWD
 			}
-			ti, tj := strings.ToLower(titleOr(hs[i].Title)), strings.ToLower(titleOr(hs[j].Title))
+			ti, tj := strings.ToLower(displayTitle(hs[i].sessionDetails, hs[i].Title)), strings.ToLower(displayTitle(hs[j].sessionDetails, hs[j].Title))
 			if ti != tj {
 				return ti < tj
 			}
@@ -222,9 +222,9 @@ func parseSort(label string) sortMode {
 	return sortRecent
 }
 
-// savePrefs persists the toggleable preferences (notify, preview, sort).
+// savePrefs persists the toggleable preferences (notify, preview, sort, cost).
 func (m model) savePrefs() {
-	saveConfig(config{Notify: m.notify, Preview: m.preview, Sort: m.sortLabel()})
+	saveConfig(config{Notify: m.notify, Preview: m.preview, Sort: m.sortLabel(), Cost: m.showCost})
 }
 
 func onOff(b bool) string {

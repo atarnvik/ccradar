@@ -26,6 +26,7 @@ const (
 	findTimeout   = 90 * time.Second
 	findMaxHits   = 5
 	findPromptLen = 160 // runes kept per prompt in the catalog
+	findRecapLen  = 240 // runes kept of a session's recap
 )
 
 const findSystemPrompt = `You help someone find one of their past Claude Code sessions from a loose description.
@@ -70,7 +71,7 @@ func findCatalog(hs []HistEntry) (catalog string, ids map[string]string) {
 		if len(prompts) == 0 && h.LastPrompt != "" {
 			prompts = []string{h.LastPrompt} // container history only carries the latest
 		}
-		if h.Title == "" && len(prompts) == 0 {
+		if h.Title == "" && h.Name == "" && len(prompts) == 0 {
 			continue
 		}
 		id := fmt.Sprintf("s%d", len(ids)+1)
@@ -83,8 +84,12 @@ func findCatalog(hs []HistEntry) (catalog string, ids map[string]string) {
 		if h.Source != "" {
 			dir = h.Source + ":" + dir
 		}
-		fmt.Fprintf(&b, "%s | %s | %s ago | %s | %s | %s\n", id, dir,
-			fmtAge(time.Since(h.ModAt).Milliseconds()), h.Branch, titleOr(h.Title), strings.Join(quoted, " · "))
+		fmt.Fprintf(&b, "%s | %s | %s ago | %s | %s | %s", id, dir,
+			fmtAge(time.Since(h.ModAt).Milliseconds()), h.Branch, displayTitle(h.sessionDetails, h.Title), strings.Join(quoted, " · "))
+		if h.Recap != "" {
+			fmt.Fprintf(&b, " | recap: %q", trunc(h.Recap, findRecapLen))
+		}
+		b.WriteByte('\n')
 	}
 	return b.String(), ids
 }

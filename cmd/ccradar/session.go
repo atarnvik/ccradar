@@ -31,6 +31,7 @@ type Session struct {
 	SurfaceID  string // matched terminal surface id; "" if no tab found
 	Source     string // source label ("" = local; else a --docker container)
 	Container  string // resolved docker container id ("" = local)
+	sessionDetails
 }
 
 func (s Session) remote() bool { return s.Container != "" }
@@ -80,12 +81,18 @@ type regFile struct {
 	Status     string `json:"status"`
 	UpdatedAt  int64  `json:"updatedAt"`
 	Entrypoint string `json:"entrypoint"`
+	Name       string `json:"name"`
+	NameSource string `json:"nameSource"`
 }
 
 // headlessEntrypoint marks a `claude -p` / Agent SDK run. These register like
 // interactive sessions while they run, but have no tab to focus and nothing to
 // resume (ccradar's own finder is one).
 const headlessEntrypoint = "sdk-cli"
+
+// derivedName marks a registry name Claude Code made up from the directory
+// (e.g. "yogi-de"); only names the user chose are worth showing.
+const derivedName = "derived"
 
 // pidAlive reports whether the process exists (EPERM still means it's there).
 func pidAlive(pid int) bool {
@@ -197,6 +204,10 @@ func localSessions() []Session {
 		tm := metaFor(rf.SessionID)
 		s.Title, s.Model, s.Branch = tm.title, tm.model, tm.branch
 		s.LastPrompt, s.LastReply = tm.prompt, tm.reply
+		s.sessionDetails = tm.details
+		if rf.Name != "" && rf.NameSource != derivedName {
+			s.Name = rf.Name
+		}
 		s.Tty = procTty(rf.PID)
 		out = append(out, s)
 	}

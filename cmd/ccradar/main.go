@@ -56,7 +56,7 @@ func main() {
 	if popupMode {
 		cfg.Notify = false // a short-lived popup shouldn't duplicate a long-running ccradar's notifications
 	}
-	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort)}, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost}, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
