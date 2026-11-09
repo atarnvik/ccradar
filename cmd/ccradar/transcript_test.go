@@ -140,3 +140,15 @@ func TestDockerScriptsOnFixture(t *testing.T) {
 		t.Fatalf("history entry = %+v, want real model and last record timestamp", hs[0])
 	}
 }
+
+func TestScanCache(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	writeTranscript(t, p, time.Now().Add(-time.Hour), `{"type":"ai-title","aiTitle":"First"}`)
+	if got := scanTranscriptCached(p).title; got != "First" {
+		t.Fatalf("title = %q", got)
+	}
+	writeTranscript(t, p, time.Now(), `{"type":"ai-title","aiTitle":"Second, longer"}`)
+	if got := scanTranscriptCached(p).title; got != "Second, longer" {
+		t.Fatalf("changed file not rescanned: %q", got)
+	}
+}
