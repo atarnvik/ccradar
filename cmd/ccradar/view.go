@@ -282,9 +282,8 @@ const (
 // rowColumns builds the aligned columns for a session/history row: status
 // and age (live rows) or age (past rows), the title, then the optional columns
 // — cost, PR, background shells, and the model when it isn't the usual one.
-// The title column is as wide as the longest title (within cw), so the columns
-// after it stay close on a wide terminal. Plain and colored have the same
-// visible width; the caller pads them to cw.
+// The title column flexes so the row fills cw-4 cells (the 4 is the row's
+// left indent), keeping the optional columns aligned at the right edge.
 func (m model) rowColumns(r row, cw int) (plain, colored string) {
 	var lead, leadC string // status/age
 	var d sessionDetails
@@ -340,7 +339,7 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 	for _, t := range tail {
 		fixed += len([]rune(t)) + 2
 	}
-	tw := max(min(cw-4-fixed, m.titleW), 8)
+	tw := max(cw-4-fixed, 8)
 	titleF := truncPad(truncEllipsis(displayTitle(d, title), tw), tw)
 
 	plain = lead + "  " + titleF

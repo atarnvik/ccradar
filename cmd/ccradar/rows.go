@@ -123,14 +123,10 @@ func (m *model) rebuild() {
 	}
 	m.rows = spaceGroups(rows)
 	m.anyPR, m.anyShell = false, false
-	m.titleW = 0
 	models := map[string]int{}
 	for _, r := range m.rows {
 		m.anyPR = m.anyPR || len(r.details().PRs) > 0
 		m.anyShell = m.anyShell || (r.kind == rowSession && len(r.session.Shells) > 0)
-		if t, ok := r.title(); ok {
-			m.titleW = max(m.titleW, len([]rune(t)))
-		}
 		if mdl := r.model(); mdl != "" {
 			models[mdl]++
 		}

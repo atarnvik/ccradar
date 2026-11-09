@@ -33,17 +33,6 @@ const (
 
 func selectable(k rowKind) bool { return k == rowSession || k == rowHist }
 
-// title is the row's displayed title (ok is false for non-session rows).
-func (r row) title() (string, bool) {
-	switch r.kind {
-	case rowSession:
-		return displayTitle(r.session.sessionDetails, r.session.Title), true
-	case rowHist:
-		return displayTitle(r.hist.sessionDetails, r.hist.Title), true
-	}
-	return "", false
-}
-
 // model is the row's short model name ("" for non-session rows).
 func (r row) model() string {
 	switch r.kind {
@@ -109,7 +98,6 @@ type model struct {
 	anyShell   bool              // some live row has background shells (shows the ⚙ column)
 	usualModel string            // the most common model in the list; only others are shown
 	oddModel   bool              // some row's model differs from usualModel (shows the model column)
-	titleW     int               // longest title in the list, so the columns after it hug it
 	showCost   bool // show past sessions' cost (off by default; $ toggles it)
 	railW      int  // preview rail width the user chose with [ / ] (0 = default)
 }
