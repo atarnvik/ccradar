@@ -32,6 +32,17 @@ const (
 
 func selectable(k rowKind) bool { return k == rowSession || k == rowHist }
 
+// details is the row's session details (zero for headers and dividers).
+func (r row) details() sessionDetails {
+	switch r.kind {
+	case rowSession:
+		return r.session.sessionDetails
+	case rowHist:
+		return r.hist.sessionDetails
+	}
+	return sessionDetails{}
+}
+
 type row struct {
 	kind    rowKind
 	header  string
@@ -63,6 +74,9 @@ type model struct {
 	height   int
 	flash    string
 	pendingKill int // pid armed for kill confirmation (0 = none)
+	prStatus   map[string]prInfo // PR URL → live status from gh
+	prBusy     bool              // a PR status lookup is in flight
+	anyPR      bool              // some row in the current list has a PR (shows the PR column)
 }
 
 type tickMsg time.Time

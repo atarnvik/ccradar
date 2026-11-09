@@ -6,7 +6,8 @@ across **Ghostty**, **iTerm2**, **Terminal.app**, and **Rex** tabs.
 If you run lots of Claude Code sessions in different tabs/projects, `ccradar` gives
 you one screen to see them all, jump straight to the right native tab, and bring
 old sessions back to life — no tmux, no fork. It reads Claude Code's own local
-data and drives your terminal through its AppleScript API. No daemon, no network.
+data and drives your terminal through its AppleScript API. No daemon; the only
+network calls are the update check and PR status lookups through your `gh`.
 
 ![ccradar demo](docs/demo.gif)
 
@@ -31,6 +32,14 @@ data and drives your terminal through its AppleScript API. No daemon, no network
 - **Cost per past session** — the Historical view shows what each session cost
   (and the preview its lines added/removed), from the totals Claude Code records
   when a session exits.
+- **PR badges** — every session that opened or worked on a pull request shows
+  its latest PR number, colored by state (open / draft / merged / closed) with a
+  CI glyph for open ones (✓ passing, ✗ failing, • running). The preview lists
+  the session's recent PRs with titles and review state, and `o` opens the
+  latest in your browser. Statuses come from one batched `gh api graphql` call
+  (refreshed every 5 minutes; merged/closed PRs are fetched once) using your
+  existing `gh` login. Without `gh` you still get the numbers; set
+  `CCRADAR_NO_PR_STATUS=1` to skip the lookups.
 - **Your session names win** — a name you gave a session is shown instead of the
   auto-generated title (both are searchable).
 - **Notifications** — get a native macOS notification the moment a session leaves

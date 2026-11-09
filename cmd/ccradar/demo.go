@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -65,6 +66,9 @@ func demoSessions() []Session {
 			local[i].sessionDetails = waitingRecap
 		}
 	}
+	local[0].PRs = []prLink{demoPR(412)}
+	local[3].PRs = []prLink{demoPR(398), demoPR(405)}
+	local[4].PRs = []prLink{demoPR(377)}
 	// A devcontainer source (shows as its own section).
 	mkr := func(cwd, status, title, model, branch, prompt string, age int64) Session {
 		return Session{
@@ -108,6 +112,8 @@ func demoHistory() []HistEntry {
 	for i := range list {
 		list[i].Cost = costs[i%len(costs)]
 	}
+	list[0].PRs = []prLink{demoPR(391)}
+	list[1].PRs = []prLink{demoPR(366)}
 	list[1].Recap = "Settled on an outbox table plus a backoff worker; the dead-letter queue and its alerting are still to do."
 	list[1].RecapAt = now.Add(-5 * time.Hour)
 	list = append(list,
@@ -118,6 +124,27 @@ func demoHistory() []HistEntry {
 		},
 	)
 	return list
+}
+
+func demoPR(n int) prLink {
+	return prLink{URL: fmt.Sprintf("https://github.com/acme/app/pull/%d", n), Repo: "acme/app", Number: n}
+}
+
+// demoPRStatus is the fixed PR status demo mode shows (it never calls gh).
+func demoPRStatus() map[string]prInfo {
+	st := map[int]prInfo{
+		412: {State: "OPEN", Checks: "PENDING", Title: "Per-IP rate limiting in the gateway"},
+		405: {State: "OPEN", Checks: "FAILURE", Title: "Split ProfileContext out of AuthContext"},
+		398: {State: "MERGED", Title: "Move token refresh into a hook"},
+		377: {State: "OPEN", Checks: "SUCCESS", Review: "APPROVED", Title: "RDS module with multi-AZ"},
+		391: {State: "MERGED", Title: "Vitest + React Testing Library"},
+		366: {State: "OPEN", Draft: true, Title: "Webhook outbox and retry worker"},
+	}
+	out := map[string]prInfo{}
+	for n, info := range st {
+		out[demoPR(n).URL] = info
+	}
+	return out
 }
 
 // demoDriver is a no-op terminal so focus/resume don't touch real apps.

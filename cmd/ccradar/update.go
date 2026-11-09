@@ -31,6 +31,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewActive {
 			m.rebuild()
 		}
+		if c := m.maybeFetchPRs(); c != nil {
+			cmds = append(cmds, c)
+		}
 		if len(cmds) > 0 {
 			return m, tea.Batch(cmds...)
 		}
@@ -38,6 +41,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.history = []HistEntry(msg)
 		if m.view == viewHistory {
 			m.rebuild()
+		}
+		return m, m.maybeFetchPRs()
+	case prStatusMsg:
+		m.prBusy = false
+		if m.prStatus == nil {
+			m.prStatus = map[string]prInfo{}
+		}
+		for url, info := range msg {
+			m.prStatus[url] = info
 		}
 	case findMsg:
 		if msg.seq != m.findSeq {
@@ -138,6 +150,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "c":
 			m.copyResume()
+		case "o":
+			m.openPR()
 		case "x":
 			m.killSelected()
 		}
@@ -343,4 +357,18 @@ func (m *model) copyResume() {
 			}
 		}
 	}
+}
+
+// openPR opens the selected session's most recent PR in the browser.
+func (m *model) openPR() {
+	l, ok := m.selectedDetails().latestPR()
+	if !ok {
+		m.flash = "no PR for this session"
+		return
+	}
+	if err := openURL(l.URL); err != nil {
+		m.flash = "couldn't open PR: " + err.Error()
+		return
+	}
+	m.flash = fmt.Sprintf("opened PR #%d", l.Number)
 }
