@@ -97,6 +97,15 @@ func duePRs(links []prLink, have map[string]prInfo, now time.Time) []prLink {
 
 type prStatusMsg map[string]prInfo
 
+// savePRCacheCmd writes a snapshot of the statuses to disk off the UI loop.
+func savePRCacheCmd(status map[string]prInfo) tea.Cmd {
+	snap := make(map[string]prInfo, len(status))
+	for url, info := range status {
+		snap[url] = info
+	}
+	return func() tea.Msg { savePRCache(snap); return nil }
+}
+
 func prStatusCmd(links []prLink) tea.Cmd {
 	return func() tea.Msg { return prStatusMsg(fetchPRs(links)) }
 }
@@ -129,15 +138,21 @@ func fetchPRs(links []prLink) map[string]prInfo {
 				groups[i] = append(groups[i], l)
 			}
 		}
+		// Each account's lookups run in parallel.
+		found := make([]map[string]prInfo, len(accounts))
+		var wg sync.WaitGroup
+		for i := range accounts {
+			if len(groups[i]) > 0 {
+				wg.Add(1)
+				go func() { defer wg.Done(); found[i] = queryPRs(groups[i], accounts[i]) }()
+			}
+		}
+		wg.Wait()
 		var next []prLink
 		for i := range accounts {
 			batch := groups[i]
-			if len(batch) == 0 {
-				continue
-			}
-			found := queryPRs(batch, accounts[i])
 			for _, l := range batch {
-				info, ok := found[l.URL]
+				info, ok := found[i][l.URL]
 				if !ok {
 					next = append(next, l)
 					continue
@@ -152,29 +167,44 @@ func fetchPRs(links []prLink) map[string]prInfo {
 	return out
 }
 
-// queryPRs fetches links as one account, a batch per request.
+// queryPRs fetches links as one account, a batch per request, in parallel.
 func queryPRs(links []prLink, acct ghAccount) map[string]prInfo {
 	got := map[string]prInfo{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 	for start := 0; start < len(links); start += prBatch {
 		query, aliases := prQuery(links[start:min(start+prBatch, len(links))])
 		if query == "" {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
-		cmd := exec.CommandContext(ctx, ghBin(), "api", "graphql", "-f", "query="+query)
-		if acct.token != "" {
-			// Last GH_TOKEN wins, overriding any inherited one (or a wrapper's).
-			cmd.Env = append(os.Environ(), "GH_TOKEN="+acct.token)
-		}
-		// gh exits non-zero when any PR in the batch is inaccessible, but still
-		// prints the rest, so the output is parsed regardless.
-		stdout, _ := cmd.Output()
-		cancel()
-		for url, info := range parsePRResponse(stdout, aliases) {
-			got[url] = info
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res := queryPRBatch(query, aliases, acct)
+			mu.Lock()
+			for url, info := range res {
+				got[url] = info
+			}
+			mu.Unlock()
+		}()
 	}
+	wg.Wait()
 	return got
+}
+
+// queryPRBatch runs one GraphQL request as acct.
+func queryPRBatch(query string, aliases map[string]string, acct ghAccount) map[string]prInfo {
+	ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ghBin(), "api", "graphql", "-f", "query="+query)
+	if acct.token != "" {
+		// Last GH_TOKEN wins, overriding any inherited one (or a wrapper's).
+		cmd.Env = append(os.Environ(), "GH_TOKEN="+acct.token)
+	}
+	// gh exits non-zero when any PR in the batch is inaccessible, but still
+	// prints the rest, so the output is parsed regardless.
+	stdout, _ := cmd.Output()
+	return parsePRResponse(stdout, aliases)
 }
 
 // ghAccount is a github.com account gh is logged into. An empty token means
@@ -199,14 +229,26 @@ func ghAccounts() []ghAccount {
 	_ = json.Unmarshal(out, &st)
 	entries := st.Hosts["github.com"]
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Active && !entries[j].Active })
-	var accts []ghAccount
-	for _, e := range entries {
+	// Tokens are fetched in parallel; order (active first) is kept.
+	tokens := make([]string, len(entries))
+	var wg sync.WaitGroup
+	for i, e := range entries {
 		if e.State != "success" || e.Login == "" {
 			continue
 		}
-		tok, err := exec.CommandContext(ctx, ghBin(), "auth", "token", "--user", e.Login).Output()
-		if t := strings.TrimSpace(string(tok)); err == nil && t != "" {
-			accts = append(accts, ghAccount{login: e.Login, token: t})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if tok, err := exec.CommandContext(ctx, ghBin(), "auth", "token", "--user", e.Login).Output(); err == nil {
+				tokens[i] = strings.TrimSpace(string(tok))
+			}
+		}()
+	}
+	wg.Wait()
+	var accts []ghAccount
+	for i, e := range entries {
+		if tokens[i] != "" {
+			accts = append(accts, ghAccount{login: e.Login, token: tokens[i]})
 		}
 	}
 	if len(accts) == 0 {

@@ -57,10 +57,15 @@ func main() {
 		cfg.Notify = false // a short-lived popup shouldn't duplicate a long-running ccradar's notifications
 	}
 	m := model{notify: cfg.Notify, preview: cfg.Preview, sort: parseSort(cfg.Sort), showCost: cfg.Cost, railW: cfg.RailW}
-	if demoMode() {
+	switch {
+	case demoMode():
 		m.prStatus = demoPRStatus()
+	case prStatusEnabled():
+		m.prStatus = loadPRCache() // badges at once; stale open PRs refresh in the background
 	}
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	saveScanCache(true)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -102,7 +107,7 @@ func debugMode(which string) {
 		return
 	}
 	// render: one frame of each view
-	m := model{sessions: sessions, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
+	m := model{sessions: sessions, sessionsReady: true, histReady: true, history: loadHistory(activeSessionIDs(sessions)), preview: true, width: 120, height: 24}
 	m.prStatus = fetchPRs(m.prLinksDue())
 	if demoMode() {
 		m.prStatus = demoPRStatus()

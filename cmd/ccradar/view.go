@@ -54,10 +54,16 @@ func (m model) tabBar() string {
 		}
 	}
 	a := fmt.Sprintf(" Active (%d) ", open)
-	if detached > 0 {
+	switch {
+	case !m.sessionsReady:
+		a = " Active (…) "
+	case detached > 0:
 		a = fmt.Sprintf(" Active (%d, +%d detached) ", open, detached)
 	}
 	h := fmt.Sprintf(" Historical (%d) ", len(m.history))
+	if !m.histReady {
+		h = " Historical (…) "
+	}
 	if m.view == viewActive {
 		return styTabOn.Render(a) + " " + styTabOff.Render(h)
 	}
@@ -112,7 +118,12 @@ func (m model) View() string {
 
 	if len(m.rows) == 0 {
 		msg := "no live sessions"
-		if m.view != viewActive {
+		switch {
+		case m.view == viewActive && !m.sessionsReady:
+			msg = "loading live sessions…"
+		case m.view != viewActive && !m.histReady:
+			msg = "loading past sessions…"
+		case m.view != viewActive:
 			msg = "no past sessions"
 		}
 		if m.query != "" {

@@ -50,6 +50,7 @@ func loadHistory(activeIDs map[string]bool) []HistEntry {
 			out = append(out, localHistory(activeIDs)...)
 		}
 	}
+	saveScanCache(false)
 	return out
 }
 

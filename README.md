@@ -50,6 +50,9 @@ network calls are the update check and PR status lookups through your `gh`.
   adds one), each PR is fetched with an account that can see it, so a work
   org and personal repos both get statuses. Without `gh` you still get the numbers; set
   `CCRADAR_NO_PR_STATUS=1` to skip the lookups.
+- **Starts warm** — transcript scans and PR statuses are cached in
+  `~/Library/Caches/ccradar`, so a fresh launch (say, a popup on a hotkey) shows
+  history and PR badges at once and only refreshes what changed. Safe to delete.
 - **Your session names win** — a name you gave a session is shown instead of the
   auto-generated title (both are searchable).
 - **Notifications** — get a native macOS notification the moment a session leaves

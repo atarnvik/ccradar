@@ -167,6 +167,7 @@ func loadSessions() []Session {
 		}
 		return out[i].UpdatedAt > out[j].UpdatedAt
 	})
+	saveScanCache(false)
 	return out
 }
 
