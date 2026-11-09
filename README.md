@@ -39,9 +39,9 @@ network calls are the update check and PR status lookups through your `gh`.
   (dev servers, watchers, long test runs) show `⚙N`, and the preview lists what
   each one is and how long it has been up, so you know which tab is holding
   port 3000 before you close it.
-- **Cost per past session** — the Historical view shows what each session cost
-  (and the preview its lines added/removed), from the totals Claude Code records
-  when a session exits.
+- **Cost per past session** (off by default; press `$` to toggle) — the
+  Historical view shows what each session cost (and the preview its lines
+  added/removed), from the totals Claude Code records when a session exits.
 - **PR badges** — every session that opened or worked on a pull request shows
   its latest PR number, colored by state (open / draft / merged / closed) with a
   CI glyph for open ones (✓ passing, ✗ failing, • running). The preview lists

@@ -88,6 +88,7 @@ type model struct {
 	agentsBusy     bool              // an agents load is in flight
 	agentsAt       time.Time         // when the last agents load was started
 	prevAgentState map[string]string // agent id → last seen state (for "needs you" notifications)
+	showCost   bool // show past sessions' cost (off by default; $ toggles it)
 }
 
 type tickMsg time.Time
