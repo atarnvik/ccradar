@@ -30,8 +30,8 @@ const (
 )
 
 const findSystemPrompt = `You help someone find one of their past Claude Code sessions from a loose description.
-You get a catalog with one session per line: id | directory | last active | branch | title | sample user prompts.
-Return the sessions that plausibly match the description, best match first, at most 5. Only include a session when its title, prompts, directory or branch give concrete evidence; return an empty list if none fit.
+You get a catalog with one session per line: id | directory | last active | branch | title | sample user prompts, sometimes followed by "recap: …" and "PRs: #12 #28" (pull requests the session opened).
+Return the sessions that plausibly match the description, best match first, at most 5. Only include a session when its title, prompts, directory, branch, recap or PRs give concrete evidence; return an empty list if none fit.
 For each, "why" is a concrete reason under 12 words, e.g. "evals for search tools; ended on an API error".
 Use only the catalog and copy ids exactly.`
 
@@ -88,6 +88,9 @@ func findCatalog(hs []HistEntry) (catalog string, ids map[string]string) {
 			fmtAge(time.Since(h.ModAt).Milliseconds()), h.Branch, displayTitle(h.sessionDetails, h.Title), strings.Join(quoted, " · "))
 		if h.Recap != "" {
 			fmt.Fprintf(&b, " | recap: %q", trunc(h.Recap, findRecapLen))
+		}
+		if len(h.PRs) > 0 {
+			fmt.Fprintf(&b, " | PRs:%s", prTokens(h.PRs))
 		}
 		b.WriteByte('\n')
 	}

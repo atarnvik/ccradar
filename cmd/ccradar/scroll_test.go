@@ -84,6 +84,11 @@ func TestFuzzyMatch(t *testing.T) {
 		{"fire xyz", "~/dev/firefly Review math", false}, // one token misses
 		{"OPUS", "model opus-4-8", true},                 // case-insensitive
 		{"zzz", "nothing here", false},
+		{"#28", "~/dev/app fix login #12 #28", true},    // PR number: whole word
+		{"#28", "~/dev/app fix login #128 #208", false}, // not a subsequence match
+		{"#2", "~/dev/app fix login #28", false},
+		{"app #12", "~/dev/app fix login #12", true},
+		{"#12", "~/dev/app #12", true},
 	}
 	for _, c := range cases {
 		if got := fuzzyMatch(c.q, c.target); got != c.want {
