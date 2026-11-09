@@ -42,8 +42,9 @@ network calls are the update check and PR status lookups through your `gh`.
   red closed) and followed by a glyph: CI for open PRs (✓ passing, ✗ failing,
   • running), `⑂` merged, `×` closed. The preview lists the session's recent
   PRs the same way with their titles. A session with several PRs shows the
-  latest plus a count (`#5752 ✓ +2`), and `o` opens all of them in your browser,
-  one tab each (asking first when there are more than 5). Statuses come from one batched `gh api graphql` call
+  latest plus a count (`#5752 ✓ +2`). `o` opens the session's PRs that are still
+  open, one browser tab each (or the latest if none are), and `O` lists all of
+  them to open one (`enter`) or all (`a`). Statuses come from one batched `gh api graphql` call
   (refreshed every 5 minutes; merged/closed PRs are fetched once) using your
   existing `gh` login. With several accounts logged in (`gh auth login` again
   adds one), each PR is fetched with an account that can see it, so a work

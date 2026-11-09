@@ -92,7 +92,7 @@ func (m model) View() string {
 
 	// Sticky line: when scrolled, show the directory header that governs the
 	// first visible row (context) plus how many rows are hidden above.
-	if m.top > 0 {
+	if m.top > 0 && !m.picking {
 		sticky := -1
 		for j := m.top - 1; j >= 0; j-- {
 			if m.rows[j].kind == rowHeader {
@@ -140,8 +140,12 @@ func (m model) View() string {
 	}
 
 	lines := make([]string, 0, v)
-	for i := m.top; i < end; i++ {
-		lines = append(lines, m.renderListLine(i, cw))
+	if m.picking {
+		lines = m.pickerLines(cw, v)
+	} else {
+		for i := m.top; i < end; i++ {
+			lines = append(lines, m.renderListLine(i, cw))
+		}
 	}
 
 	if showRail {
@@ -159,7 +163,7 @@ func (m model) View() string {
 		}
 	}
 
-	if end < len(m.rows) {
+	if end < len(m.rows) && !m.picking {
 		b.WriteString(styHelp.Render(fmt.Sprintf("  ↓ %d more", len(m.rows)-end)) + "\n")
 	} else {
 		b.WriteString("\n")
@@ -168,7 +172,9 @@ func (m model) View() string {
 		b.WriteString(styStatus.Render(trunc("  "+m.flash, m.width)) + "\n")
 	}
 	var help string
-	if m.finding {
+	if m.picking {
+		help = fmt.Sprintf("  ↑/↓ move · enter open · a open all %d · esc close", len(m.pickPRs))
+	} else if m.finding {
 		help = "  describe the session you're looking for · enter ask Claude · esc cancel"
 	} else if m.searching {
 		help = "  type to filter · enter accept · esc clear · ↑/↓ move"
@@ -183,7 +189,7 @@ func (m model) View() string {
 		case n == 1:
 			help += " · o open PR"
 		case n > 1:
-			help += fmt.Sprintf(" · o open %d PRs", n)
+			help += " · o open PRs · O pick"
 		}
 		help += " · / search · ? find · s sort:" + m.sortLabel() + " · p preview:" + onOff(m.preview) + " · n notify:" + onOff(m.notify) + " · r refresh · q quit"
 	}
