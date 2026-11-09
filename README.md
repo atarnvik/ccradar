@@ -43,7 +43,9 @@ network calls are the update check and PR status lookups through your `gh`.
   the session's recent PRs with titles and review state, and `o` opens the
   latest in your browser. Statuses come from one batched `gh api graphql` call
   (refreshed every 5 minutes; merged/closed PRs are fetched once) using your
-  existing `gh` login. Without `gh` you still get the numbers; set
+  existing `gh` login. With several accounts logged in (`gh auth login` again
+  adds one), each PR is fetched with an account that can see it, so a work
+  org and personal repos both get statuses. Without `gh` you still get the numbers; set
   `CCRADAR_NO_PR_STATUS=1` to skip the lookups.
 - **Your session names win** — a name you gave a session is shown instead of the
   auto-generated title (both are searchable).

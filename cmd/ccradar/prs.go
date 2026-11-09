@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -99,31 +101,154 @@ func prStatusCmd(links []prLink) tea.Cmd {
 	return func() tea.Msg { return prStatusMsg(fetchPRs(links)) }
 }
 
-// fetchPRs looks the links up with `gh api graphql`, a batch per request. Every
-// link gets an entry (zero State on failure) so failures back off too.
+// fetchPRs looks the links up with `gh api graphql`, trying every github.com
+// account gh is logged into: PRs one account can't see (a private repo of
+// another org) are retried with the next, and the account that worked is
+// remembered per repo owner so later refreshes go straight to it. Every link
+// gets an entry (zero State on failure) so failures back off too.
 func fetchPRs(links []prLink) map[string]prInfo {
 	now := time.Now()
 	out := make(map[string]prInfo, len(links))
 	for _, l := range links {
 		out[l.URL] = prInfo{fetched: now}
 	}
+	if len(links) == 0 {
+		return out
+	}
+	accounts := ghAccounts()
+	tried := map[string]map[int]bool{} // url → accounts already asked
+	remaining := links
+	for round := 0; round < len(accounts) && len(remaining) > 0; round++ {
+		groups := map[int][]prLink{}
+		for _, l := range remaining {
+			if i := pickAccount(l, accounts, tried[l.URL]); i >= 0 {
+				if tried[l.URL] == nil {
+					tried[l.URL] = map[int]bool{}
+				}
+				tried[l.URL][i] = true
+				groups[i] = append(groups[i], l)
+			}
+		}
+		var next []prLink
+		for i := range accounts {
+			batch := groups[i]
+			if len(batch) == 0 {
+				continue
+			}
+			found := queryPRs(batch, accounts[i])
+			for _, l := range batch {
+				info, ok := found[l.URL]
+				if !ok {
+					next = append(next, l)
+					continue
+				}
+				info.fetched = now
+				out[l.URL] = info
+				rememberOwnerAccount(l, accounts[i].login)
+			}
+		}
+		remaining = next
+	}
+	return out
+}
+
+// queryPRs fetches links as one account, a batch per request.
+func queryPRs(links []prLink, acct ghAccount) map[string]prInfo {
+	got := map[string]prInfo{}
 	for start := 0; start < len(links); start += prBatch {
-		batch := links[start:min(start+prBatch, len(links))]
-		query, aliases := prQuery(batch)
+		query, aliases := prQuery(links[start:min(start+prBatch, len(links))])
 		if query == "" {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
+		cmd := exec.CommandContext(ctx, ghBin(), "api", "graphql", "-f", "query="+query)
+		if acct.token != "" {
+			// Last GH_TOKEN wins, overriding any inherited one (or a wrapper's).
+			cmd.Env = append(os.Environ(), "GH_TOKEN="+acct.token)
+		}
 		// gh exits non-zero when any PR in the batch is inaccessible, but still
 		// prints the rest, so the output is parsed regardless.
-		stdout, _ := exec.CommandContext(ctx, ghBin(), "api", "graphql", "-f", "query="+query).Output()
+		stdout, _ := cmd.Output()
 		cancel()
 		for url, info := range parsePRResponse(stdout, aliases) {
-			info.fetched = now
-			out[url] = info
+			got[url] = info
 		}
 	}
-	return out
+	return got
+}
+
+// ghAccount is a github.com account gh is logged into. An empty token means
+// "whatever gh picks by default".
+type ghAccount struct{ login, token string }
+
+// ghAccounts lists gh's github.com accounts, active first, with their tokens.
+// Without that list (an older gh, a GH_TOKEN-only setup) it returns gh's
+// default account alone, which is how lookups worked before.
+func ghAccounts() []ghAccount {
+	ctx, cancel := context.WithTimeout(context.Background(), prTimeout)
+	defer cancel()
+	// Exits non-zero if any account has a problem; the JSON is still printed.
+	out, _ := exec.CommandContext(ctx, ghBin(), "auth", "status", "--json", "hosts").Output()
+	var st struct {
+		Hosts map[string][]struct {
+			Login  string `json:"login"`
+			State  string `json:"state"`
+			Active bool   `json:"active"`
+		} `json:"hosts"`
+	}
+	_ = json.Unmarshal(out, &st)
+	entries := st.Hosts["github.com"]
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Active && !entries[j].Active })
+	var accts []ghAccount
+	for _, e := range entries {
+		if e.State != "success" || e.Login == "" {
+			continue
+		}
+		tok, err := exec.CommandContext(ctx, ghBin(), "auth", "token", "--user", e.Login).Output()
+		if t := strings.TrimSpace(string(tok)); err == nil && t != "" {
+			accts = append(accts, ghAccount{login: e.Login, token: t})
+		}
+	}
+	if len(accts) == 0 {
+		return []ghAccount{{}}
+	}
+	return accts
+}
+
+// ownerAccounts remembers which account could see each repo owner's PRs.
+var ownerAccounts = struct {
+	sync.Mutex
+	m map[string]string
+}{m: map[string]string{}}
+
+func repoOwner(l prLink) string { owner, _, _ := strings.Cut(l.Repo, "/"); return strings.ToLower(owner) }
+
+func rememberOwnerAccount(l prLink, login string) {
+	if login == "" {
+		return
+	}
+	ownerAccounts.Lock()
+	ownerAccounts.m[repoOwner(l)] = login
+	ownerAccounts.Unlock()
+}
+
+// pickAccount chooses the next account to ask about a PR: the one that worked
+// for its owner before, else the first not yet tried (-1 when all were).
+func pickAccount(l prLink, accounts []ghAccount, tried map[int]bool) int {
+	ownerAccounts.Lock()
+	known := ownerAccounts.m[repoOwner(l)]
+	ownerAccounts.Unlock()
+	for i, a := range accounts {
+		if known != "" && a.login == known && !tried[i] {
+			return i
+		}
+	}
+	for i := range accounts {
+		if !tried[i] {
+			return i
+		}
+	}
+	return -1
 }
 
 var repoPart = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
