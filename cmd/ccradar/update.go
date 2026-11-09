@@ -127,6 +127,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.preview = !m.preview
 			m.savePrefs()
 			m.flash = "preview " + onOff(m.preview)
+		case "$": // deliberately left out of the help line
+			m.showCost = !m.showCost
+			m.savePrefs()
+			m.flash = "cost " + onOff(m.showCost)
 		case "r":
 			if m.view == viewActive {
 				return m, loadActiveCmd()

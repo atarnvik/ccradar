@@ -227,6 +227,9 @@ func (m model) renderListLine(i, cw int) string {
 	return padVis("    "+colored, 4+len([]rune(plain)), cw)
 }
 
+// costColumnMinWidth is the narrowest list that still gets a cost column.
+const costColumnMinWidth = 70
+
 // rowColumns builds the aligned columns for a session/history row. The title
 // column flexes so the plain text is exactly cw-4 cells wide (the 4 is the row's
 // left indent), keeping the highlighted and normal forms identical.
@@ -240,7 +243,7 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 		if tw < 8 {
 			tw = 8
 		}
-		titleF := truncPad(titleOr(s.Title), tw)
+		titleF := truncPad(displayTitle(s.sessionDetails, s.Title), tw)
 		mdl := truncPad(modelShort(s.Model), 10)
 		if s.SurfaceID != "" {
 			loc := truncPad("→ tab", 8)
@@ -255,16 +258,30 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 	case rowHist:
 		h := r.hist
 		age := fmt.Sprintf("%4s", fmtAge(time.Since(h.ModAt).Milliseconds()))
+		showCost := m.showCost && cw >= costColumnMinWidth
 		tw := cw - 32
+		if showCost {
+			tw -= 7 // "$0.00" + 2 spaces
+		}
 		if tw < 8 {
 			tw = 8
 		}
-		titleF := truncPad(titleOr(h.Title), tw)
+		titleF := truncPad(displayTitle(h.sessionDetails, h.Title), tw)
 		mdl := truncPad(modelShort(h.Model), 10)
 		resume := truncPad("↻ resume", 8)
 		plain = fmt.Sprintf("%s  %s  %s  %s", age, titleF, mdl, resume)
 		colored = fmt.Sprintf("%s  %s  %s  %s",
 			styDim.Render(age), styTitle.Render(titleF), styModel.Render(mdl), styTab.Render(resume))
+		if showCost {
+			cost := ""
+			if h.Cost.known() {
+				cost = fmtCost(h.Cost.USD)
+			}
+			cost = fmt.Sprintf("%5s", cost)
+			plain = fmt.Sprintf("%s  %s  %s  %s  %s", age, titleF, cost, mdl, resume)
+			colored = fmt.Sprintf("%s  %s  %s  %s  %s",
+				styDim.Render(age), styTitle.Render(titleF), styDim.Render(cost), styModel.Render(mdl), styTab.Render(resume))
+		}
 	}
 	return plain, colored
 }
@@ -284,18 +301,24 @@ func (m model) previewLines(w, h int) []string {
 	}
 
 	if m.cursor < len(m.rows) {
-		var title, source, dir, branch, model, status, age, prompt, reply string
+		var title, source, dir, branch, model, status, age, prompt, reply, cost string
+		var d sessionDetails
 		switch r := m.rows[m.cursor]; r.kind {
 		case rowSession:
 			s := r.session
-			title, source, dir, branch = titleOr(s.Title), s.Source, dirDisplay(s.CWD), s.Branch
+			d = s.sessionDetails
+			title, source, dir, branch = displayTitle(d, s.Title), s.Source, dirDisplay(s.CWD), s.Branch
 			model, status, age = modelShort(s.Model), s.Status, fmtAge(nowMs()-s.UpdatedAt)
 			prompt, reply = s.LastPrompt, s.LastReply
 		case rowHist:
 			hh := r.hist
-			title, dir, branch = titleOr(hh.Title), dirDisplay(hh.CWD), hh.Branch
+			d = hh.sessionDetails
+			title, dir, branch = displayTitle(d, hh.Title), dirDisplay(hh.CWD), hh.Branch
 			model, age = modelShort(hh.Model), fmtAge(time.Since(hh.ModAt).Milliseconds())
 			prompt, reply = hh.LastPrompt, hh.LastReply
+			if m.showCost {
+				cost = costLine(d.Cost) // a live session's cost-state is from an earlier run
+			}
 		}
 		push(title, styPrevTtl)
 		if source != "" {
@@ -314,10 +337,22 @@ func (m model) previewLines(w, h int) []string {
 			line2 += " · " + age
 		}
 		push(line2, styDim)
+		if cost != "" {
+			push(cost, styDim)
+		}
 		if why := m.selectedWhy(); why != "" {
 			segs = append(segs, seg{"", styDim})
 			push("▸ Match", styPrevLbl)
 			push(why, styPrevBody)
+		}
+		if d.Recap != "" {
+			segs = append(segs, seg{"", styDim})
+			label := "▸ Recap"
+			if !d.RecapAt.IsZero() {
+				label += " · " + fmtAge(time.Since(d.RecapAt).Milliseconds()) + " ago"
+			}
+			push(label, styPrevLbl)
+			push(d.Recap, styPrevBody)
 		}
 		if prompt != "" {
 			segs = append(segs, seg{"", styDim})
