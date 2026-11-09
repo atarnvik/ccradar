@@ -475,3 +475,15 @@ func TestSortPreference(t *testing.T) {
 		t.Fatalf("legacy config: %+v", c)
 	}
 }
+
+// A terminal can report 0 columns (e.g. under script(1), or before the first
+// resize), which used to panic with a negative truncation width.
+func TestZeroWidthDoesNotPanic(t *testing.T) {
+	for _, view := range []viewKind{viewActive, viewHistory} {
+		m := model{preview: true, view: view}
+		m.sessions = demoSessions()
+		m.history = demoHistory()
+		m.rebuild()
+		_ = m.View()
+	}
+}
