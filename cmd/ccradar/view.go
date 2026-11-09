@@ -253,6 +253,9 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 		if showPR {
 			tw -= prColumnWidth + 2
 		}
+		if m.anyShell {
+			tw -= shellColumnWidth + 2
+		}
 		if tw < 8 {
 			tw = 8
 		}
@@ -262,6 +265,13 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 		if showPR {
 			pr, prC = prBadge(s.sessionDetails, m.prStatus)
 			pr, prC = pr+"  ", prC+"  "
+		}
+		if m.anyShell {
+			sh := strings.Repeat(" ", shellColumnWidth)
+			if n := len(s.Shells); n > 0 {
+				sh = truncPad(fmt.Sprintf("⚙%d", n), shellColumnWidth)
+			}
+			pr, prC = pr+sh+"  ", prC+styBusy.Render(sh)+"  "
 		}
 		if s.SurfaceID != "" {
 			loc := truncPad("→ tab", 8)
@@ -328,6 +338,7 @@ func (m model) previewLines(w, h int) []string {
 	if m.cursor < len(m.rows) {
 		var title, source, dir, branch, model, status, age, prompt, reply, cost string
 		var d sessionDetails
+		var shells []bgShell
 		switch r := m.rows[m.cursor]; r.kind {
 		case rowSession:
 			s := r.session
@@ -335,6 +346,7 @@ func (m model) previewLines(w, h int) []string {
 			title, source, dir, branch = displayTitle(d, s.Title), s.Source, dirDisplay(s.CWD), s.Branch
 			model, status, age = modelShort(s.Model), s.Status, fmtAge(nowMs()-s.UpdatedAt)
 			prompt, reply = s.LastPrompt, s.LastReply
+			shells = s.Shells
 		case rowHist:
 			hh := r.hist
 			d = hh.sessionDetails
@@ -364,6 +376,20 @@ func (m model) previewLines(w, h int) []string {
 		push(line2, styDim)
 		if cost != "" {
 			push(cost, styDim)
+		}
+		if len(shells) > 0 {
+			segs = append(segs, seg{"", styDim})
+			push("▸ Background shells", styPrevLbl)
+			for _, sh := range shells {
+				desc := sh.Desc
+				if desc == "" {
+					desc = sh.ID
+				}
+				if !sh.Started.IsZero() {
+					desc += " · " + fmtAge(time.Since(sh.Started).Milliseconds())
+				}
+				push("⚙ "+desc, styPrevBody)
+			}
 		}
 		if len(d.PRs) > 0 {
 			segs = append(segs, seg{"", styDim})

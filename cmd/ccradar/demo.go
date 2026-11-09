@@ -67,6 +67,11 @@ func demoSessions() []Session {
 		}
 	}
 	local[0].PRs = []prLink{demoPR(412)}
+	local[1].Shells = []bgShell{{ID: "b1", Desc: "Run the gateway on :8080", Started: time.Now().Add(-40 * time.Minute)}}
+	local[2].Shells = []bgShell{
+		{ID: "b2", Desc: "Start the dev server on :3000", Started: time.Now().Add(-25 * time.Minute)},
+		{ID: "b3", Desc: "Watch the test suite", Started: time.Now().Add(-8 * time.Minute)},
+	}
 	local[3].PRs = []prLink{demoPR(398), demoPR(405)}
 	local[4].PRs = []prLink{demoPR(377)}
 	// A devcontainer source (shows as its own section).
