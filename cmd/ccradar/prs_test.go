@@ -169,3 +169,76 @@ func TestPRStatusFlow(t *testing.T) {
 		t.Error("CCRADAR_NO_PR_STATUS=1 should disable lookups")
 	}
 }
+
+// A fake gh with two accounts: "me" (active) sees only owner "me", "work" sees
+// only owner "work". Every graphql call is logged as "<token> <owners…>".
+func fakeMultiAccountGh(t *testing.T) (logPath string) {
+	t.Helper()
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	logPath = filepath.Join(dir, "calls")
+	script := `#!/bin/sh
+if [ "$1 $2" = "auth status" ]; then
+  echo '{"hosts":{"github.com":[{"login":"work","state":"success","active":false},{"login":"me","state":"success","active":true},{"login":"broken","state":"error","active":false}]}}'
+  exit 1
+fi
+if [ "$1 $2" = "auth token" ]; then echo "tok-$4"; exit 0; fi
+query="$4"
+owners=$(printf '%s' "$query" | grep -o 'owner: "[^"]*"' | sed 's/owner: "\(.*\)"/\1/' | tr '\n' ' ')
+echo "$GH_TOKEN $owners" >> "` + logPath + `"
+printf '{"data":{'
+i=0; sep=""
+for o in $owners; do
+  if [ "tok-$o" = "$GH_TOKEN" ]; then
+    printf '%s"p%d":{"pullRequest":{"state":"OPEN","title":"%s pr","isDraft":false,"commits":{"nodes":[]}}}' "$sep" $i "$o"
+  else
+    printf '%s"p%d":null' "$sep" $i
+  fi
+  i=$((i+1)); sep=","
+done
+printf '}}\n'
+exit 1
+`
+	fake := filepath.Join(dir, "gh")
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CCRADAR_GH", fake)
+	t.Setenv("GH_TOKEN", "inherited") // must not leak into per-account calls
+	ownerAccounts.Lock()
+	ownerAccounts.m = map[string]string{}
+	ownerAccounts.Unlock()
+	return logPath
+}
+
+func TestFetchPRsAcrossAccounts(t *testing.T) {
+	logPath := fakeMultiAccountGh(t)
+	links := []prLink{
+		{URL: "u-me", Repo: "me/app", Number: 1},
+		{URL: "u-work", Repo: "work/app", Number: 2},
+		{URL: "u-gone", Repo: "nobody/app", Number: 3},
+	}
+
+	got := fetchPRs(links)
+	if got["u-me"].Title != "me pr" || got["u-work"].Title != "work pr" {
+		t.Fatalf("got = %+v, want each PR from the account that can see it", got)
+	}
+	if info := got["u-gone"]; info.State != "" || info.fetched.IsZero() {
+		t.Errorf("PR no account can see should be recorded empty (to back off): %+v", info)
+	}
+	calls, _ := os.ReadFile(logPath)
+	want := "tok-me me work nobody \ntok-work work nobody \n"
+	if string(calls) != want {
+		t.Fatalf("first refresh calls:\n%s\nwant (active account first, then the rest retried):\n%s", calls, want)
+	}
+
+	// Next refresh: owners are remembered, so each account gets only its own.
+	_ = os.Remove(logPath)
+	fetchPRs(links[:2])
+	calls, _ = os.ReadFile(logPath)
+	if want := "tok-me me \ntok-work work \n"; string(calls) != want {
+		t.Fatalf("second refresh calls:\n%s\nwant one call per account, no misses:\n%s", calls, want)
+	}
+}
