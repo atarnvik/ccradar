@@ -112,3 +112,37 @@ func TestCostHiddenUntilToggled(t *testing.T) {
 		t.Error("the toggle should stay out of the help line")
 	}
 }
+
+func TestContextSizeFromTranscript(t *testing.T) {
+	var d sessionDetails
+	for _, ln := range []string{
+		`{"type":"assistant","isSidechain":false,"message":{"model":"claude-opus-5-5","usage":{"input_tokens":2,"cache_creation_input_tokens":2234,"cache_read_input_tokens":101314}}}`,
+		`{"type":"assistant","isSidechain":true,"message":{"model":"claude-haiku-4-5","usage":{"input_tokens":9000}}}`, // sub-agent
+		`{"type":"assistant","isSidechain":false,"message":{"model":"<synthetic>","usage":{"input_tokens":0}}}`,        // error turn
+	} {
+		d.scanDetails([]byte(ln))
+	}
+	if d.Context != 103550 {
+		t.Fatalf("context = %d, want 103550 (sub-agent and synthetic turns skipped)", d.Context)
+	}
+	d.scanDetails([]byte(`{"type":"system","subtype":"compact_boundary","compactMetadata":{"trigger":"auto","preTokens":441380,"postTokens":31816}}`))
+	if d.Context != 31816 {
+		t.Fatalf("after compaction context = %d, want 31816", d.Context)
+	}
+	for n, want := range map[int]string{950: "950", 31816: "32k", 441380: "441k", 999_499: "999k", 999_500: "1.0M", 1_234_567: "1.2M"} {
+		if got := fmtTokens(n); got != want {
+			t.Errorf("fmtTokens(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestContextColumnOnLiveRows(t *testing.T) {
+	now := nowMs()
+	m := model{view: viewActive, width: 140, height: 20, sessionsReady: true, preview: true}
+	m.sessions = []Session{{PID: 1, CWD: "/a", Status: "idle", UpdatedAt: now, Title: "Big one", SurfaceID: "s",
+		sessionDetails: sessionDetails{Context: 412_000}}}
+	m.rebuild()
+	if v := m.View(); !strings.Contains(v, " 412k ") || !strings.Contains(v, "412k context") {
+		t.Fatalf("want the context size in the row and the preview:\n%s", v)
+	}
+}

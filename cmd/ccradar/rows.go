@@ -122,10 +122,11 @@ func (m *model) rebuild() {
 		}
 	}
 	m.rows = spaceGroups(rows)
-	m.anyPR, m.anyShell = false, false
+	m.anyPR, m.anyShell, m.anyCtx = false, false, false
 	for _, r := range m.rows {
 		m.anyPR = m.anyPR || len(r.details().PRs) > 0
 		m.anyShell = m.anyShell || (r.kind == rowSession && len(r.session.Shells) > 0)
+		m.anyCtx = m.anyCtx || (r.kind == rowSession && r.session.Context > 0)
 	}
 	m.clampCursor()
 }

@@ -102,13 +102,13 @@ func (m model) previewLines(w, h int) []string {
 		s := r.session
 		d, shells = s.sessionDetails, s.Shells
 		title, source, dir = displayTitle(d, s.Title), s.Source, dirDisplay(s.CWD)
-		meta = []string{s.Branch, modelShort(s.Model), s.Status + " " + fmtAge(nowMs()-s.UpdatedAt)}
+		meta = []string{s.Branch, modelShort(s.Model), ctxLabel(d.Context), s.Status + " " + fmtAge(nowMs()-s.UpdatedAt)}
 		prompt, reply = s.LastPrompt, s.LastReply
 	case rowHist:
 		hh := r.hist
 		d = hh.sessionDetails
 		title, source, dir = displayTitle(d, hh.Title), hh.Source, dirDisplay(hh.CWD)
-		meta = []string{hh.Branch, modelShort(hh.Model), fmtAge(time.Since(hh.ModAt).Milliseconds()) + " ago"}
+		meta = []string{hh.Branch, modelShort(hh.Model), ctxLabel(d.Context), fmtAge(time.Since(hh.ModAt).Milliseconds()) + " ago"}
 		prompt, reply = hh.LastPrompt, hh.LastReply
 		if m.showCost {
 			cost = costLine(d.Cost) // a live session's cost-state is from an earlier run
@@ -173,6 +173,14 @@ func (m model) previewLines(w, h int) []string {
 		}
 	}
 	return b.render(h)
+}
+
+// ctxLabel is the preview's context size ("412k context"; "" when unknown).
+func ctxLabel(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmtTokens(n) + " context"
 }
 
 // prPreviewLine is one PR in the preview: "#23 ✓ title…", the number colored
