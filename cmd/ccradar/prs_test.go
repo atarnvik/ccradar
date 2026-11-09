@@ -50,14 +50,14 @@ func TestDuePRs(t *testing.T) {
 
 func TestPRQuerySkipsMalformedRepos(t *testing.T) {
 	q, aliases := prQuery([]prLink{
-		{URL: "a", Repo: "meetyogi/yogi", Number: 5691},
+		{URL: "a", Repo: "acme/app", Number: 5691},
 		{URL: "b", Repo: `evil") { x } y: repository(owner: "z`, Number: 1},
 		{URL: "c", Repo: "noslash", Number: 2},
 	})
 	if len(aliases) != 1 || aliases["p0"] != "a" {
 		t.Fatalf("aliases = %v", aliases)
 	}
-	if !strings.Contains(q, `p0: repository(owner: "meetyogi", name: "yogi") { pullRequest(number: 5691)`) || strings.Contains(q, "evil") {
+	if !strings.Contains(q, `p0: repository(owner: "acme", name: "app") { pullRequest(number: 5691)`) || strings.Contains(q, "evil") {
 		t.Fatalf("query = %s", q)
 	}
 	if q, _ := prQuery([]prLink{{URL: "c", Repo: "noslash"}}); q != "" {
@@ -66,14 +66,14 @@ func TestPRQuerySkipsMalformedRepos(t *testing.T) {
 }
 
 const ghResponse = `{"data":{
- "p0":{"pullRequest":{"state":"OPEN","isDraft":false,"title":"Social topics page","reviewDecision":"APPROVED","commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE"}}}]}}},
+ "p0":{"pullRequest":{"state":"OPEN","isDraft":false,"title":"Search tweaks page","reviewDecision":"APPROVED","commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE"}}}]}}},
  "p1":{"pullRequest":{"state":"MERGED","isDraft":false,"title":"Tables","reviewDecision":null,"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}},
  "p2":null},
  "errors":[{"type":"NOT_FOUND","path":["p2"]}]}`
 
 func TestParsePRResponse(t *testing.T) {
 	got := parsePRResponse([]byte(ghResponse), map[string]string{"p0": "u0", "p1": "u1", "p2": "u2"})
-	if got["u0"] != (prInfo{State: "OPEN", Title: "Social topics page", Checks: "FAILURE", Review: "APPROVED"}) {
+	if got["u0"] != (prInfo{State: "OPEN", Title: "Search tweaks page", Checks: "FAILURE", Review: "APPROVED"}) {
 		t.Errorf("u0 = %+v", got["u0"])
 	}
 	if got["u1"].State != "MERGED" || got["u1"].Checks != "" {
@@ -122,10 +122,10 @@ func TestPRBadgeAndPreviewLine(t *testing.T) {
 		preview string
 	}{
 		"unknown": {prInfo{}, "#5691     ", "#5691   "},
-		"passing": {prInfo{State: "OPEN", Checks: "SUCCESS", Title: "Social topics"}, "#5691 ✓   ", "#5691 ✓ Social topics"},
-		"failing": {prInfo{State: "OPEN", Checks: "FAILURE", Title: "Social topics"}, "#5691 ✗   ", "#5691 ✗ Social topics"},
-		"draft":   {prInfo{State: "OPEN", Draft: true, Checks: "PENDING", Title: "Social topics"}, "#5691 •   ", "#5691 • Social topics"},
-		"merged":  {prInfo{State: "MERGED", Checks: "SUCCESS", Title: "Social topics"}, "#5691 ⑂   ", "#5691 ⑂ Social topics"},
+		"passing": {prInfo{State: "OPEN", Checks: "SUCCESS", Title: "Search tweaks"}, "#5691 ✓   ", "#5691 ✓ Search tweaks"},
+		"failing": {prInfo{State: "OPEN", Checks: "FAILURE", Title: "Search tweaks"}, "#5691 ✗   ", "#5691 ✗ Search tweaks"},
+		"draft":   {prInfo{State: "OPEN", Draft: true, Checks: "PENDING", Title: "Search tweaks"}, "#5691 •   ", "#5691 • Search tweaks"},
+		"merged":  {prInfo{State: "MERGED", Checks: "SUCCESS", Title: "Search tweaks"}, "#5691 ⑂   ", "#5691 ⑂ Search tweaks"},
 		"closed":  {prInfo{State: "CLOSED", Checks: "FAILURE"}, "#5691 ×   ", "#5691 × closed"},
 	}
 	for name, c := range cases {
