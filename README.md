@@ -38,9 +38,10 @@ network calls are the update check and PR status lookups through your `gh`.
   Historical view shows what each session cost (and the preview its lines
   added/removed), from the totals Claude Code records when a session exits.
 - **PR badges** — every session that opened or worked on a pull request shows
-  its latest PR number, colored by state (open / draft / merged / closed) with a
-  CI glyph for open ones (✓ passing, ✗ failing, • running). The preview lists
-  the session's recent PRs with titles and review state, and `o` opens the
+  its latest PR number, colored by state (green open, dim draft, purple merged,
+  red closed) and followed by a glyph: CI for open PRs (✓ passing, ✗ failing,
+  • running), `⑂` merged, `×` closed. The preview lists the session's recent
+  PRs the same way with their titles, and `o` opens the
   latest in your browser. Statuses come from one batched `gh api graphql` call
   (refreshed every 5 minutes; merged/closed PRs are fetched once) using your
   existing `gh` login. Without `gh` you still get the numbers; set

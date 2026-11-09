@@ -176,7 +176,7 @@ func (m model) previewLines(w, h int) []string {
 // by state and the glyph showing CI for open PRs.
 func prPreviewLine(l prLink, info prInfo, numW, w int) pline {
 	num := fmt.Sprintf("%-*s", numW, fmt.Sprintf("#%d", l.Number))
-	glyph, gs := checksGlyph(info)
+	glyph, gs := stateGlyph(info)
 	rest := info.Title
 	if rest == "" && info.State != "" {
 		rest = strings.ToLower(info.State)
