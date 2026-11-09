@@ -47,6 +47,7 @@ func (r row) details() sessionDetails {
 type row struct {
 	kind    rowKind
 	header  string
+	dir     string // a header's directory
 	session Session
 	hist    HistEntry
 }
@@ -81,6 +82,13 @@ type model struct {
 	picking     bool     // the PR picker (O) is open
 	pickPRs     []prLink // the picker's PRs, newest first
 	pickCursor  int
+	wtStale        []staleWT // worktrees whose branch's PRs are all merged or closed
+	wtBusy         bool      // a worktree scan is running
+	wtStarted      bool      // the first scan (after history loads) was started
+	wtOpenWhenDone bool      // W was pressed before the first scan finished
+	wtPicking      bool      // the stale-worktree list (W) is open
+	wtCursor       int
+	wtArmed        string // path armed for removal ("all" = every one; "" = none)
 	prStatus   map[string]prInfo // PR URL → live status from gh
 	prBusy     bool              // a PR status lookup is in flight
 	anyPR      bool              // some row in the current list has a PR (shows the PR column)

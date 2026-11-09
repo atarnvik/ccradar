@@ -44,7 +44,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view == viewHistory {
 			m.rebuild()
 		}
-		return m, m.maybeFetchPRs()
+		var scan tea.Cmd
+		if !m.wtStarted {
+			m.wtStarted = true
+			scan = m.startWTScan()
+		}
+		return m, tea.Batch(m.maybeFetchPRs(), scan)
 	case prStatusMsg:
 		m.prBusy = false
 		if m.prStatus == nil {
@@ -54,6 +59,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.prStatus[url] = info
 		}
 		return m, savePRCacheCmd(m.prStatus)
+	case wtScanMsg:
+		m.worktreesScanned(msg)
+	case wtRemovedMsg:
+		m.worktreesRemoved(msg)
 	case findMsg:
 		if msg.seq != m.findSeq {
 			return m, nil // superseded or cancelled
@@ -78,6 +87,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.picking {
 			return m.handlePickKey(msg)
+		}
+		if m.wtPicking {
+			return m.handleWorktreeKey(msg)
 		}
 		if m.finding {
 			return m.handleFindKey(msg)
@@ -174,6 +186,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openPRs()
 		case "O":
 			m.openPicker()
+		case "W":
+			return m, m.openWorktrees()
 		case "x":
 			m.killSelected()
 		}
