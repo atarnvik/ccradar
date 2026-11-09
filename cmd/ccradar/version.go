@@ -54,7 +54,7 @@ func upgradeHint() string {
 			return "brew upgrade ccradar"
 		}
 	}
-	return "go install github.com/atarnvik/ccradar@latest"
+	return "go install github.com/atarnvik/ccradar/cmd/ccradar@latest"
 }
 
 // displayVersion is the human-readable version for `ccradar --version`.
