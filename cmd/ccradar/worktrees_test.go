@@ -116,3 +116,32 @@ func TestStaleWorktrees(t *testing.T) {
 		t.Fatalf("dirty worktree should stay listed: %+v", m.wtStale)
 	}
 }
+
+func TestWTName(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	cases := []struct {
+		w    staleWT
+		want string
+	}{
+		{staleWT{Path: home + "/src/app/.worktrees/fix-x", Main: home + "/src/app"}, "~/src/app ⎇ fix-x"},
+		{staleWT{Path: "/private/tmp/claude-501/-Users-me-src-app/scratch/wt-readme", Main: home + "/src/app"}, "~/src/app ⎇ wt-readme"},
+		{staleWT{Path: home + "/src/app/.worktrees/fix-x"}, "~/src/app ⎇ fix-x"},
+	}
+	for _, c := range cases {
+		if got := wtName(c.w); got != c.want {
+			t.Errorf("wtName(%s) = %q, want %q", c.w.Path, got, c.want)
+		}
+	}
+	if got := fitWTName("~/development/personal/claude_dashboard ⎇ wt-readme", 30); got != "claude_dashboard ⎇ wt-readme" {
+		t.Errorf("fitWTName = %q", got)
+	}
+	if got := fitWTName("~/a ⎇ "+strings.Repeat("x", 40), 20); len([]rune(got)) != 20 {
+		t.Errorf("fitWTName long tail = %q", got)
+	}
+}
+
+func TestFitWTNameCutsRepo(t *testing.T) {
+	if got := fitWTName("~/development/personal/claude_dashboard ⎇ wt-readme", 25); got != "…de_dashboard ⎇ wt-readme" {
+		t.Errorf("fitWTName = %q", got)
+	}
+}
