@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.12.0](https://github.com/atarnvik/ccradar/compare/v0.11.0...v0.12.0) (2026-11-10)
+
+
+### Features
+
+* cleaner session list ([#32](https://github.com/atarnvik/ccradar/issues/32)) ([6ff88c1](https://github.com/atarnvik/ccradar/commit/6ff88c18194eb940b87e6f50af9d6e2aca21da85))
+* find and remove stale worktrees (W) ([#35](https://github.com/atarnvik/ccradar/issues/35)) ([4740b82](https://github.com/atarnvik/ccradar/commit/4740b828a543693e32f9af9b510be8347fa6ec9a))
+* search [#28](https://github.com/atarnvik/ccradar/issues/28) to find the session that opened PR [#28](https://github.com/atarnvik/ccradar/issues/28) ([#31](https://github.com/atarnvik/ccradar/issues/31)) ([322ebfa](https://github.com/atarnvik/ccradar/commit/322ebfafcf766c5235dfea43304353713202d44d))
+* show each live session's context size ([#34](https://github.com/atarnvik/ccradar/issues/34)) ([c51a271](https://github.com/atarnvik/ccradar/commit/c51a271bebd8f78978da281693e3664dab584bf6))
+
+
+### Bug Fixes
+
+* keep detached rows' columns aligned ([#39](https://github.com/atarnvik/ccradar/issues/39)) ([5bb2b57](https://github.com/atarnvik/ccradar/commit/5bb2b576f5666c37e78afcb00008b84a9b42b5c8))
+* name worktrees outside the repo by repo and folder in the W list ([#42](https://github.com/atarnvik/ccradar/issues/42)) ([24082ef](https://github.com/atarnvik/ccradar/commit/24082ef761a68d20144938bb6972eda58a4718d4))
+* **rex:** leave resumed tabs unlabeled so they show Claude's title ([#38](https://github.com/atarnvik/ccradar/issues/38)) ([61a1c26](https://github.com/atarnvik/ccradar/commit/61a1c268865479018e3b17d5705c053b2809674c))
+
+
+### Documentation
+
+* simpler README and a new demo GIF ([#40](https://github.com/atarnvik/ccradar/issues/40)) ([7dd23e0](https://github.com/atarnvik/ccradar/commit/7dd23e0ebdd8bac74cd4d439ef50935aa9e35d6f))
+
 ## [0.11.0](https://github.com/atarnvik/ccradar/compare/v0.10.0...v0.11.0) (2026-11-09)
 
 
