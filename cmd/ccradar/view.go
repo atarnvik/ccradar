@@ -345,10 +345,6 @@ func (m model) rowColumns(r row, cw int) (plain, colored string) {
 	ms := truncPad(modelShort(mdl), 10)
 	tail, tailC = append(tail, ms), append(tailC, styModel.Render(ms))
 	detached := r.kind == rowSession && r.session.SurfaceID == ""
-	if detached {
-		pid := fmt.Sprintf("pid %d", r.session.PID)
-		tail, tailC = append(tail, pid), append(tailC, pid)
-	}
 
 	fixed := len([]rune(lead)) + 2
 	for _, t := range tail {
