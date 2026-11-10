@@ -470,8 +470,42 @@ func (m *model) worktreesRemoved(msg wtRemovedMsg) {
 	}
 }
 
-// wtName is how the list names a worktree: its path, shortened like headers.
-func wtName(w staleWT) string { return headerDir(w.Path) }
+// wtName is how the list names a worktree: "<repo> ⎇ <name>". A worktree
+// kept inside its repo is shortened like a header; one elsewhere (say under
+// /tmp) is named after its main checkout and its own folder.
+func wtName(w staleWT) string {
+	if d := headerDir(w.Path); w.Main == "" || strings.Contains(d, " ⎇ ") {
+		return d
+	}
+	return dirDisplay(w.Main) + " ⎇ " + filepath.Base(w.Path)
+}
+
+// fitWTName shortens a worktree name to n runes: first by dropping the
+// repo's parent dirs, then by cutting the repo name from the left, so the
+// worktree's own name stays visible.
+func fitWTName(name string, n int) string {
+	if len([]rune(name)) <= n {
+		return name
+	}
+	i := strings.Index(name, " ⎇ ")
+	if i < 0 {
+		return truncEllipsis(name, n)
+	}
+	repo, tail := []rune(filepath.Base(name[:i])), []rune(name[i:])
+	if len(repo)+len(tail) <= n {
+		return string(repo) + string(tail)
+	}
+	keep := n - len(tail) - 1
+	if keep < 4 {
+		return truncEllipsis(name, n)
+	}
+	return "…" + string(repo[len(repo)-keep:]) + string(tail)
+}
+
+// wtPRLabel is the PR column: the latest PR, plus how many more.
+func wtPRLabel(w staleWT) string {
+	return fmt.Sprintf("#%d", w.PRs[0].Number) + morePRs(len(w.PRs)-1)
+}
 
 // wtPickerLines renders the worktree list in place of the session list:
 // exactly h lines of width w.
@@ -483,15 +517,19 @@ func (m model) wtPickerLines(w, h int) []string {
 		nameW = max(nameW, len([]rune(wtName(s))))
 	}
 	nameW = min(nameW, max(w-30, 12))
+	prW := 0
+	for _, s := range m.wtStale {
+		prW = max(prW, len([]rune(wtPRLabel(s))))
+	}
 	room := max(h-1, 1)
 	top := max(m.wtCursor-room+1, 0)
 	for i := top; i < len(m.wtStale) && len(out) < h; i++ {
 		s := m.wtStale[i]
-		name := truncPad(truncEllipsis(wtName(s), nameW), nameW)
+		name := truncPad(fitWTName(wtName(s), nameW), nameW)
 		latest := s.PRs[0]
 		info := prInfo{State: latest.State}
 		glyph, gs := stateGlyph(info)
-		pr := fmt.Sprintf("#%d", latest.Number) + morePRs(len(s.PRs)-1)
+		pr := truncPad(wtPRLabel(s), prW)
 		age := fmtAge(time.Since(s.Mod).Milliseconds())
 		plain := name + "  " + glyph + " " + pr + "  " + age
 		if i == m.wtCursor {
